@@ -284,6 +284,15 @@ export class PeopleService {
     });
   }
 
+  public async addContactsToGroup(groupResourceName: string, contactResourceNames: string[]): Promise<void> {
+    await this.people.contactGroups.members.modify({
+      resourceName: groupResourceName,
+      requestBody: {
+        resourceNamesToAdd: contactResourceNames,
+      },
+    });
+  }
+
   // Other People directory (for workspace users)
 
   public async searchDirectory(query: string, maxResults = 30): Promise<Contact[]> {
