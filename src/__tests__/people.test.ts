@@ -6,6 +6,7 @@ const mockContactGroupsList = vi.fn();
 const mockContactGroupsGet = vi.fn();
 const mockContactGroupsCreate = vi.fn();
 const mockContactGroupsDelete = vi.fn();
+const mockContactGroupsMembersModify = vi.fn();
 const mockPeopleGet = vi.fn();
 const mockPeopleCreateContact = vi.fn();
 const mockPeopleUpdateContact = vi.fn();
@@ -31,6 +32,7 @@ vi.mock("googleapis", () => ({
         get: mockContactGroupsGet,
         create: mockContactGroupsCreate,
         delete: mockContactGroupsDelete,
+        members: { modify: mockContactGroupsMembersModify },
       },
       otherContacts: {
         list: mockOtherContactsList,
@@ -320,6 +322,30 @@ describe("PeopleService", () => {
       const result = await service.searchDirectory("test");
 
       expect(result).toHaveLength(0);
+    });
+  });
+
+  describe("addContactsToGroup", () => {
+    it("calls members.modify with correct group and contact resource names", async () => {
+      mockContactGroupsMembersModify.mockResolvedValue({ data: {} });
+
+      await service.addContactsToGroup("contactGroups/abc123", ["people/c1", "people/c2"]);
+
+      expect(mockContactGroupsMembersModify).toHaveBeenCalledWith({
+        resourceName: "contactGroups/abc123",
+        requestBody: { resourceNamesToAdd: ["people/c1", "people/c2"] },
+      });
+    });
+
+    it("handles an empty contact list", async () => {
+      mockContactGroupsMembersModify.mockResolvedValue({ data: {} });
+
+      await service.addContactsToGroup("contactGroups/abc123", []);
+
+      expect(mockContactGroupsMembersModify).toHaveBeenCalledWith({
+        resourceName: "contactGroups/abc123",
+        requestBody: { resourceNamesToAdd: [] },
+      });
     });
   });
 
