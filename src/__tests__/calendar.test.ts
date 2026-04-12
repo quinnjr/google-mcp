@@ -228,10 +228,33 @@ describe("CalendarService", () => {
       expect(call.conferenceDataVersion).toBe(0);
       expect(call.requestBody.conferenceData).toBeUndefined();
     });
+
+    it("should pass colorId in requestBody when provided", async () => {
+      mockEventsInsert.mockResolvedValue({
+        data: { id: "new", summary: "Colored Event", colorId: "9" },
+      });
+
+      const result = await service.createEvent({
+        summary: "Colored Event",
+        start: { dateTime: "2026-12-05T21:00:00+01:00" },
+        end: { dateTime: "2026-12-06T01:00:00+01:00" },
+        colorId: "9",
+      });
+
+      expect(mockEventsInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({ colorId: "9" }),
+        })
+      );
+      expect(result.colorId).toBe("9");
+    });
   });
 
   describe("updateEvent", () => {
     it("should update event", async () => {
+      mockEventsGet.mockResolvedValue({
+        data: { id: "e1", summary: "Original" },
+      });
       mockEventsUpdate.mockResolvedValue({
         data: { id: "e1", summary: "Updated" },
       });
@@ -239,6 +262,41 @@ describe("CalendarService", () => {
       const result = await service.updateEvent({ calendarId: "primary", eventId: "e1", summary: "Updated" });
 
       expect(result.summary).toBe("Updated");
+    });
+
+    it("should pass colorId in requestBody when provided", async () => {
+      mockEventsGet.mockResolvedValue({
+        data: { id: "e1", summary: "Party", colorId: "7" },
+      });
+      mockEventsUpdate.mockResolvedValue({
+        data: { id: "e1", summary: "Party", colorId: "9" },
+      });
+
+      const result = await service.updateEvent({ calendarId: "primary", eventId: "e1", colorId: "9" });
+
+      expect(mockEventsUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({ colorId: "9" }),
+        })
+      );
+      expect(result.colorId).toBe("9");
+    });
+
+    it("should preserve existing colorId when not provided in update", async () => {
+      mockEventsGet.mockResolvedValue({
+        data: { id: "e1", summary: "Party", colorId: "9" },
+      });
+      mockEventsUpdate.mockResolvedValue({
+        data: { id: "e1", summary: "Updated Party", colorId: "9" },
+      });
+
+      await service.updateEvent({ calendarId: "primary", eventId: "e1", summary: "Updated Party" });
+
+      expect(mockEventsUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({ colorId: "9" }),
+        })
+      );
     });
   });
 
