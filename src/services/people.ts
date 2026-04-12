@@ -25,6 +25,7 @@ export interface Contact {
   birthdays?: Array<{ date?: { year?: number; month?: number; day?: number } }>;
   notes?: string;
   photos?: Array<{ url?: string }>;
+  memberships?: Array<{ contactGroupResourceName: string }>;
 }
 
 export interface ContactGroup {
@@ -74,7 +75,7 @@ export class PeopleService {
       pageSize: options.pageSize || 100,
       pageToken: options.pageToken,
       sortOrder: options.sortOrder || "LAST_NAME_ASCENDING",
-      personFields: "names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,biographies,photos",
+      personFields: "names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,biographies,photos,memberships",
     });
 
     const contacts: Contact[] = (response.data.connections || []).map((person) =>
@@ -90,7 +91,7 @@ export class PeopleService {
   public async getContact(resourceName: string): Promise<Contact> {
     const response = await this.people.people.get({
       resourceName,
-      personFields: "names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,biographies,photos",
+      personFields: "names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,biographies,photos,memberships",
     });
 
     return this.formatContact(response.data);
@@ -99,7 +100,7 @@ export class PeopleService {
   public async searchContacts(query: string, maxResults = 30): Promise<Contact[]> {
     const response = await this.people.people.searchContacts({
       query,
-      readMask: "names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,biographies,photos",
+      readMask: "names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,biographies,photos,memberships",
       pageSize: maxResults,
     });
 
@@ -147,7 +148,7 @@ export class PeopleService {
 
     const response = await this.people.people.createContact({
       requestBody: person,
-      personFields: "names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,biographies,photos",
+      personFields: "names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,biographies,photos,memberships",
     });
 
     return this.formatContact(response.data);
@@ -205,7 +206,7 @@ export class PeopleService {
       resourceName: options.resourceName,
       updatePersonFields: updatePersonFields.join(","),
       requestBody: person,
-      personFields: "names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,biographies,photos",
+      personFields: "names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,biographies,photos,memberships",
     });
 
     return this.formatContact(response.data);
@@ -367,6 +368,9 @@ export class PeopleService {
       })),
       notes: primaryBio?.value || undefined,
       photos: person.photos?.map((p) => ({ url: p.url || undefined })),
+      memberships: person.memberships
+        ?.filter((m) => m.contactGroupMembership?.contactGroupResourceName)
+        .map((m) => ({ contactGroupResourceName: m.contactGroupMembership!.contactGroupResourceName! })),
     };
   }
 }
