@@ -30,6 +30,7 @@ export interface CalendarEvent {
     displayName?: string;
     self?: boolean;
   };
+  colorId?: string;
 }
 
 export interface CalendarInfo {
@@ -62,6 +63,7 @@ export interface EventCreateOptions {
   sendUpdates?: "all" | "externalOnly" | "none";
   recurrence?: string[];
   meetLink?: string;
+  colorId?: string;
 }
 
 export interface EventUpdateOptions {
@@ -82,6 +84,7 @@ export interface EventUpdateOptions {
   };
   attendees?: string[];
   sendUpdates?: "all" | "externalOnly" | "none";
+  colorId?: string;
 }
 
 export class CalendarService {
@@ -182,6 +185,7 @@ export class CalendarService {
       end: options.end,
       attendees: options.attendees?.map((email) => ({ email })),
       recurrence: options.recurrence,
+      colorId: options.colorId,
     };
 
     if (options.meetLink) {
@@ -227,6 +231,7 @@ export class CalendarService {
       attendees: options.attendees
         ? options.attendees.map((email) => ({ email }))
         : currentEvent.data.attendees,
+      colorId: options.colorId ?? currentEvent.data.colorId,
     };
 
     const response = await this.calendar.events.update({
@@ -378,6 +383,7 @@ export class CalendarService {
             self: event.organizer.self || undefined,
           }
         : undefined,
+      colorId: event.colorId || undefined,
     };
   }
 }

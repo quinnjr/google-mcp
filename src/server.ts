@@ -1024,6 +1024,10 @@ export class GoogleWorkspaceMCPServer {
                   type: "string",
                   description: "Google Meet URL to attach as video conference link (e.g., 'https://meet.google.com/abc-defg-hij')",
                 },
+                colorId: {
+                  type: "string",
+                  description: "Event color ID (1=Lavender, 2=Sage, 3=Grape, 4=Flamingo, 5=Banana, 6=Tangerine, 7=Peacock, 8=Graphite, 9=Blueberry, 10=Basil, 11=Tomato)",
+                },
               },
               required: ["summary"],
             },
@@ -1075,6 +1079,10 @@ export class GoogleWorkspaceMCPServer {
                   type: "string",
                   enum: ["all", "externalOnly", "none"],
                   description: "Whether to send notifications",
+                },
+                colorId: {
+                  type: "string",
+                  description: "Event color ID (1=Lavender, 2=Sage, 3=Grape, 4=Flamingo, 5=Banana, 6=Tangerine, 7=Peacock, 8=Graphite, 9=Blueberry, 10=Basil, 11=Tomato)",
                 },
               },
               required: ["eventId"],
@@ -3607,6 +3615,7 @@ export class GoogleWorkspaceMCPServer {
             attendees,
             sendUpdates,
             meetLink,
+            colorId,
           } = args as {
             calendarId?: string;
             summary: string;
@@ -3620,6 +3629,7 @@ export class GoogleWorkspaceMCPServer {
             attendees?: string[];
             sendUpdates?: "all" | "externalOnly" | "none";
             meetLink?: string;
+            colorId?: string;
           };
 
           const start = startDateTime
@@ -3639,6 +3649,7 @@ export class GoogleWorkspaceMCPServer {
             attendees,
             sendUpdates,
             meetLink,
+            colorId,
           });
           return {
             content: [
@@ -3662,6 +3673,7 @@ export class GoogleWorkspaceMCPServer {
             timeZone,
             attendees,
             sendUpdates,
+            colorId,
           } = args as {
             calendarId?: string;
             eventId: string;
@@ -3673,6 +3685,7 @@ export class GoogleWorkspaceMCPServer {
             timeZone?: string;
             attendees?: string[];
             sendUpdates?: "all" | "externalOnly" | "none";
+            colorId?: string;
           };
 
           const start = startDateTime
@@ -3692,6 +3705,7 @@ export class GoogleWorkspaceMCPServer {
             end,
             attendees,
             sendUpdates,
+            colorId,
           });
           return {
             content: [
