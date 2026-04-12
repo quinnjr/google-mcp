@@ -149,6 +149,64 @@ describe("PeopleService", () => {
 
       expect(result.displayName).toBe("Updated Name");
     });
+
+    it("should pass only provided fields to updatePersonFields", async () => {
+      mockPeopleUpdateContact.mockResolvedValue({
+        data: {
+          resourceName: "people/c123",
+          names: [{ displayName: "Updated", givenName: "Updated" }],
+        },
+      });
+
+      await service.updateContact({
+        resourceName: "people/c123",
+        etag: "etag123",
+        givenName: "Updated",
+      });
+
+      expect(mockPeopleUpdateContact).toHaveBeenCalledWith(
+        expect.objectContaining({
+          updatePersonFields: "names",
+        })
+      );
+    });
+
+    it("should update names field when familyName is empty string (clearing family name)", async () => {
+      mockPeopleUpdateContact.mockResolvedValue({
+        data: {
+          resourceName: "people/c123",
+          names: [{ displayName: "Eveline", givenName: "Eveline" }],
+        },
+      });
+
+      await service.updateContact({
+        resourceName: "people/c123",
+        etag: "etag123",
+        givenName: "Eveline",
+        familyName: "",
+      });
+
+      const call = mockPeopleUpdateContact.mock.calls[0][0];
+      expect(call.updatePersonFields).toContain("names");
+      expect(call.requestBody.names[0].familyName).toBe("");
+    });
+
+    it("should include emailAddresses and phoneNumbers in updatePersonFields when provided", async () => {
+      mockPeopleUpdateContact.mockResolvedValue({
+        data: { resourceName: "people/c123" },
+      });
+
+      await service.updateContact({
+        resourceName: "people/c123",
+        etag: "etag123",
+        emails: [{ value: "new@example.com" }],
+        phoneNumbers: [{ value: "+41 79 000 00 00" }],
+      });
+
+      const call = mockPeopleUpdateContact.mock.calls[0][0];
+      expect(call.updatePersonFields).toContain("emailAddresses");
+      expect(call.updatePersonFields).toContain("phoneNumbers");
+    });
   });
 
   describe("deleteContact", () => {

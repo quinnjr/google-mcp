@@ -1486,6 +1486,48 @@ export class GoogleWorkspaceMCPServer {
             },
           },
           {
+            name: "contacts_update",
+            description: "Update an existing contact. Only the fields provided will be changed. To update the name, provide givenName and/or familyName. The contact's etag is fetched automatically.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                resourceName: {
+                  type: "string",
+                  description: "Contact resource name (e.g., 'people/c1234567890')",
+                },
+                givenName: {
+                  type: "string",
+                  description: "New first name",
+                },
+                familyName: {
+                  type: "string",
+                  description: "New last name",
+                },
+                email: {
+                  type: "string",
+                  description: "New email address (replaces all existing emails)",
+                },
+                phone: {
+                  type: "string",
+                  description: "New phone number (replaces all existing phone numbers)",
+                },
+                organization: {
+                  type: "string",
+                  description: "New company/organization name",
+                },
+                jobTitle: {
+                  type: "string",
+                  description: "New job title",
+                },
+                notes: {
+                  type: "string",
+                  description: "New notes (replaces existing notes)",
+                },
+              },
+              required: ["resourceName"],
+            },
+          },
+          {
             name: "contacts_delete",
             description: "Delete a contact.",
             inputSchema: {
@@ -3947,6 +3989,34 @@ export class GoogleWorkspaceMCPServer {
             notes?: string;
           };
           const result = await this.people!.createContact({
+            givenName,
+            familyName,
+            emails: email ? [{ value: email }] : undefined,
+            phoneNumbers: phone ? [{ value: phone }] : undefined,
+            organization: organization || jobTitle ? { name: organization, title: jobTitle } : undefined,
+            notes,
+          });
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        if (name === "contacts_update") {
+          const { resourceName, givenName, familyName, email, phone, organization, jobTitle, notes } = args as {
+            resourceName: string;
+            givenName?: string;
+            familyName?: string;
+            email?: string;
+            phone?: string;
+            organization?: string;
+            jobTitle?: string;
+            notes?: string;
+          };
+          // Fetch current contact to get the required etag
+          const current = await this.people!.getContact(resourceName);
+          const result = await this.people!.updateContact({
+            resourceName,
+            etag: current.etag!,
             givenName,
             familyName,
             emails: email ? [{ value: email }] : undefined,
