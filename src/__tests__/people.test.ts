@@ -62,6 +62,10 @@ describe("PeopleService", () => {
               names: [{ displayName: "John Doe", givenName: "John", familyName: "Doe" }],
               emailAddresses: [{ value: "john@example.com", type: "work" }],
               phoneNumbers: [{ value: "555-1234", type: "mobile" }],
+              memberships: [
+                { contactGroupMembership: { contactGroupResourceName: "contactGroups/myContacts" } },
+                { contactGroupMembership: { contactGroupResourceName: "contactGroups/friends" } },
+              ],
             },
           ],
           nextPageToken: "token",
@@ -73,6 +77,10 @@ describe("PeopleService", () => {
 
       expect(result.contacts).toHaveLength(1);
       expect(result.contacts[0].displayName).toBe("John Doe");
+      expect(result.contacts[0].memberships).toEqual([
+        { contactGroupResourceName: "contactGroups/myContacts" },
+        { contactGroupResourceName: "contactGroups/friends" },
+      ]);
       expect(result.nextPageToken).toBe("token");
     });
 
