@@ -1,0 +1,89 @@
+{
+  "missing": [
+    {
+      "email": "info@seminare-glarisegg.ch",
+      "name": "info@seminare-glarisegg.ch",
+      "sources": [
+        "personal inbox (From + Cc)",
+        "sent mail (To + Cc)"
+      ],
+      "count": 2
+    },
+    {
+      "email": "contact@snowflakeswing.ch",
+      "name": "Snowflake Swing",
+      "sources": [
+        "personal inbox (From + Cc)"
+      ],
+      "count": 1
+    },
+    {
+      "email": "mail@lustwerkstatt.ch",
+      "name": "Lustwerkstatt",
+      "sources": [
+        "personal inbox (From + Cc)"
+      ],
+      "count": 1
+    },
+    {
+      "email": "entrenoustanz@hotmail.com",
+      "name": "entrenous tanz",
+      "sources": [
+        "personal inbox (From + Cc)"
+      ],
+      "count": 1
+    },
+    {
+      "email": "1axcsyxq8qu8ejt1fb5bqut3i3jfnk4xb0lcv2@bf08.eu1.hubspotemail.net",
+      "name": "",
+      "sources": [
+        "sent mail (To + Cc)"
+      ],
+      "count": 1
+    }
+  ],
+  "inContacts": [
+    {
+      "email": "john.ditchburn3@ntlworld.com",
+      "name": "John Ditchburn",
+      "sources": [
+        "personal inbox (From + Cc)",
+        "sent mail (To + Cc)"
+      ],
+      "count": 27
+    },
+    {
+      "email": "theresa.ackermann@gmail.com",
+      "name": "Theresa Ackermann",
+      "sources": [
+        "personal inbox (From + Cc)",
+        "sent mail (To + Cc)"
+      ],
+      "count": 3
+    },
+    {
+      "email": "jasmin@ondamare.ch",
+      "name": "Jasmin | Onda + Maré",
+      "sources": [
+        "sent mail (To + Cc)"
+      ],
+      "count": 1
+    },
+    {
+      "email": "nuria.br@gmail.com",
+      "name": "Nuria Bonilla",
+      "sources": [
+        "sent mail (To + Cc)"
+      ],
+      "count": 2
+    },
+    {
+      "email": "ixchelruiz@yahoo.com",
+      "name": "Ixchel Ruiz",
+      "sources": [
+        "sent mail (To + Cc)"
+      ],
+      "count": 1
+    }
+  ]
+}
