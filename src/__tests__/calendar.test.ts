@@ -181,6 +181,53 @@ describe("CalendarService", () => {
         })
       );
     });
+
+    it("should attach meetLink as conferenceData when provided", async () => {
+      mockEventsInsert.mockResolvedValue({
+        data: { id: "new", summary: "Video Call" },
+      });
+
+      await service.createEvent({
+        summary: "Video Call",
+        start: { dateTime: "2026-04-30T20:30:00+02:00" },
+        end: { dateTime: "2026-04-30T22:00:00+02:00" },
+        meetLink: "https://meet.google.com/abc-defg-hij",
+      });
+
+      expect(mockEventsInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conferenceDataVersion: 1,
+          requestBody: expect.objectContaining({
+            conferenceData: {
+              conferenceSolution: { key: { type: "hangoutsMeet" } },
+              entryPoints: [
+                {
+                  entryPointType: "video",
+                  uri: "https://meet.google.com/abc-defg-hij",
+                  label: "meet.google.com/abc-defg-hij",
+                },
+              ],
+            },
+          }),
+        })
+      );
+    });
+
+    it("should omit conferenceData when meetLink is not provided", async () => {
+      mockEventsInsert.mockResolvedValue({
+        data: { id: "new", summary: "No Video" },
+      });
+
+      await service.createEvent({
+        summary: "No Video",
+        start: { dateTime: "2026-04-30T20:30:00+02:00" },
+        end: { dateTime: "2026-04-30T22:00:00+02:00" },
+      });
+
+      const call = mockEventsInsert.mock.calls[0][0];
+      expect(call.conferenceDataVersion).toBe(0);
+      expect(call.requestBody.conferenceData).toBeUndefined();
+    });
   });
 
   describe("updateEvent", () => {
