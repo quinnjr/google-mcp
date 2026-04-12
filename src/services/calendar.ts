@@ -61,6 +61,7 @@ export interface EventCreateOptions {
   attendees?: string[];
   sendUpdates?: "all" | "externalOnly" | "none";
   recurrence?: string[];
+  meetLink?: string;
 }
 
 export interface EventUpdateOptions {
@@ -183,10 +184,25 @@ export class CalendarService {
       recurrence: options.recurrence,
     };
 
+    if (options.meetLink) {
+      const meetCode = options.meetLink.replace(/^https?:\/\/meet\.google\.com\//, "");
+      eventResource.conferenceData = {
+        conferenceSolution: { key: { type: "hangoutsMeet" } },
+        entryPoints: [
+          {
+            entryPointType: "video",
+            uri: options.meetLink,
+            label: `meet.google.com/${meetCode}`,
+          },
+        ],
+      };
+    }
+
     const response = await this.calendar.events.insert({
       calendarId,
       requestBody: eventResource,
       sendUpdates: options.sendUpdates || "none",
+      conferenceDataVersion: options.meetLink ? 1 : 0,
     });
 
     return this.formatEvent(response.data);

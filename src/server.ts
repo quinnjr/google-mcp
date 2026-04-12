@@ -1020,6 +1020,10 @@ export class GoogleWorkspaceMCPServer {
                   enum: ["all", "externalOnly", "none"],
                   description: "Whether to send notifications (default: 'none')",
                 },
+                meetLink: {
+                  type: "string",
+                  description: "Google Meet URL to attach as video conference link (e.g., 'https://meet.google.com/abc-defg-hij')",
+                },
               },
               required: ["summary"],
             },
@@ -3560,6 +3564,7 @@ export class GoogleWorkspaceMCPServer {
             timeZone,
             attendees,
             sendUpdates,
+            meetLink,
           } = args as {
             calendarId?: string;
             summary: string;
@@ -3572,6 +3577,7 @@ export class GoogleWorkspaceMCPServer {
             timeZone?: string;
             attendees?: string[];
             sendUpdates?: "all" | "externalOnly" | "none";
+            meetLink?: string;
           };
 
           const start = startDateTime
@@ -3590,6 +3596,7 @@ export class GoogleWorkspaceMCPServer {
             end,
             attendees,
             sendUpdates,
+            meetLink,
           });
           return {
             content: [
