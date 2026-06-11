@@ -143,3 +143,8 @@ dist
 
 # End of https://www.toptal.com/developers/gitignore/api/node
 
+# OAuth credentials
+credentials.json
+tokens.json
+
+unsaved-contacts.json
