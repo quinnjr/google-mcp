@@ -1541,6 +1541,34 @@ export class GoogleWorkspaceMCPServer {
               required: ["resourceName"],
             },
           },
+          {
+            name: "contacts_create_group",
+            description: "Create a new contact group/label.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                  description: "Name of the new contact group/label",
+                },
+              },
+              required: ["name"],
+            },
+          },
+          {
+            name: "contacts_delete_group",
+            description: "Delete a contact group/label (contacts in the group are not deleted).",
+            inputSchema: {
+              type: "object",
+              properties: {
+                resourceName: {
+                  type: "string",
+                  description: "Contact group resource name (e.g., 'contactGroups/abc123')",
+                },
+              },
+              required: ["resourceName"],
+            },
+          },
 
           // YouTube Tools
           {
@@ -3962,6 +3990,22 @@ export class GoogleWorkspaceMCPServer {
           const result = await this.people!.getContactGroup(resourceName);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        if (name === "contacts_create_group") {
+          const { name } = args as { name: string };
+          const result = await this.people!.createContactGroup(name);
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        if (name === "contacts_delete_group") {
+          const { resourceName } = args as { resourceName: string };
+          await this.people!.deleteContactGroup(resourceName);
+          return {
+            content: [{ type: "text", text: `Contact group ${resourceName} deleted.` }],
           };
         }
 
