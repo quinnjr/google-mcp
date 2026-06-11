@@ -1504,6 +1504,25 @@ export class GoogleWorkspaceMCPServer {
               required: [],
             },
           },
+          {
+            name: "contacts_add_to_group",
+            description: "Add one or more contacts to a contact group/label.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                groupResourceName: {
+                  type: "string",
+                  description: "Contact group resource name (e.g., 'contactGroups/abc123')",
+                },
+                contactResourceNames: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "List of contact resource names to add (e.g., ['people/c123'])",
+                },
+              },
+              required: ["groupResourceName", "contactResourceNames"],
+            },
+          },
 
           // YouTube Tools
           {
@@ -3903,6 +3922,17 @@ export class GoogleWorkspaceMCPServer {
           const result = await this.people!.listContactGroups();
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        if (name === "contacts_add_to_group") {
+          const { groupResourceName, contactResourceNames } = args as {
+            groupResourceName: string;
+            contactResourceNames: string[];
+          };
+          await this.people!.addContactsToGroup(groupResourceName, contactResourceNames);
+          return {
+            content: [{ type: "text", text: `Added ${contactResourceNames.length} contact(s) to group ${groupResourceName}.` }],
           };
         }
 
