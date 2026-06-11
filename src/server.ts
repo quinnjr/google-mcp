@@ -1527,6 +1527,20 @@ export class GoogleWorkspaceMCPServer {
               required: ["groupResourceName", "contactResourceNames"],
             },
           },
+          {
+            name: "contacts_get_group",
+            description: "Get a contact group/label by resource name, including the full details of its members.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                resourceName: {
+                  type: "string",
+                  description: "Contact group resource name (e.g., 'contactGroups/abc123')",
+                },
+              },
+              required: ["resourceName"],
+            },
+          },
 
           // YouTube Tools
           {
@@ -3940,6 +3954,14 @@ export class GoogleWorkspaceMCPServer {
           await this.people!.addContactsToGroup(groupResourceName, contactResourceNames);
           return {
             content: [{ type: "text", text: `Added ${contactResourceNames.length} contact(s) to group ${groupResourceName}.` }],
+          };
+        }
+
+        if (name === "contacts_get_group") {
+          const { resourceName } = args as { resourceName: string };
+          const result = await this.people!.getContactGroup(resourceName);
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
         }
 
