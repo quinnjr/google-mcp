@@ -161,7 +161,7 @@ export class PeopleService {
 
     const updatePersonFields: string[] = [];
 
-    if (options.givenName || options.familyName) {
+    if (options.givenName !== undefined || options.familyName !== undefined) {
       person.names = [
         {
           givenName: options.givenName,
