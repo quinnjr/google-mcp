@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/quinnjr-google-mcp-badge.png)](https://mseep.ai/app/quinnjr-google-mcp)
+
 # Google MCP Server
 
 A comprehensive Model Context Protocol (MCP) server for Google integration, providing access to Google Calendar, Docs, Sheets, Slides, Drive, Gmail, Contacts, YouTube, Tasks, Forms, Chat, and Meet.
