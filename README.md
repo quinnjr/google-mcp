@@ -38,6 +38,7 @@ A comprehensive Model Context Protocol (MCP) server for Google integration, prov
 - Send emails and reply to threads
 - Mark as read/unread, trash messages
 - List labels and organize emails
+- List and download email attachments
 
 ### Google Contacts (People API)
 - List, search, and manage contacts
@@ -248,6 +249,9 @@ Tokens are stored locally and will be refreshed automatically:
 | `gmail_search` | Search emails |
 | `gmail_get_unread` | Get unread emails |
 | `gmail_get_thread` | Get email thread |
+| `gmail_list_attachments` | List attachments on a message |
+| `gmail_download_attachment` | Download an attachment to local disk |
+| `gmail_download_all_attachments` | Download every attachment on a message to local disk |
 
 ### Google Contacts
 | Tool | Description |
