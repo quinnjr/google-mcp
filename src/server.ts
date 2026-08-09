@@ -1114,6 +1114,33 @@ export class GoogleWorkspaceMCPServer {
             },
           },
           {
+            name: "calendar_move_event",
+            description: "Move a calendar event from one calendar to another, keeping its ID.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                calendarId: {
+                  type: "string",
+                  description: "Calendar ID the event currently lives on (default: 'primary')",
+                },
+                eventId: {
+                  type: "string",
+                  description: "The ID of the event to move",
+                },
+                destination: {
+                  type: "string",
+                  description: "Calendar ID to move the event to",
+                },
+                sendUpdates: {
+                  type: "string",
+                  enum: ["all", "externalOnly", "none"],
+                  description: "Whether to send notifications",
+                },
+              },
+              required: ["eventId", "destination"],
+            },
+          },
+          {
             name: "calendar_quick_add",
             description: "Quickly add an event using natural language (e.g., 'Meeting with John tomorrow at 3pm').",
             inputSchema: {
@@ -3773,6 +3800,29 @@ export class GoogleWorkspaceMCPServer {
               {
                 type: "text",
                 text: `Event ${eventId} deleted.`,
+              },
+            ],
+          };
+        }
+
+        if (name === "calendar_move_event") {
+          const { calendarId, eventId, destination, sendUpdates } = args as {
+            calendarId?: string;
+            eventId: string;
+            destination: string;
+            sendUpdates?: "all" | "externalOnly" | "none";
+          };
+          const result = await this.calendar!.moveEvent(
+            calendarId || "primary",
+            eventId,
+            destination,
+            sendUpdates
+          );
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(result, null, 2),
               },
             ],
           };

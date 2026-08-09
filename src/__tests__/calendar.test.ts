@@ -8,6 +8,7 @@ const mockEventsGet = vi.fn();
 const mockEventsInsert = vi.fn();
 const mockEventsUpdate = vi.fn();
 const mockEventsDelete = vi.fn();
+const mockEventsMove = vi.fn();
 const mockEventsQuickAdd = vi.fn();
 const mockFreebusyQuery = vi.fn();
 
@@ -24,6 +25,7 @@ vi.mock("googleapis", () => ({
         insert: mockEventsInsert,
         update: mockEventsUpdate,
         delete: mockEventsDelete,
+        move: mockEventsMove,
         quickAdd: mockEventsQuickAdd,
       },
       freebusy: {
@@ -311,6 +313,38 @@ describe("CalendarService", () => {
           calendarId: "primary",
           eventId: "e1",
         })
+      );
+    });
+  });
+
+  describe("moveEvent", () => {
+    it("should move event to another calendar", async () => {
+      mockEventsMove.mockResolvedValue({
+        data: { id: "e1", summary: "Party" },
+      });
+
+      const result = await service.moveEvent("primary", "e1", "work");
+
+      expect(mockEventsMove).toHaveBeenCalledWith(
+        expect.objectContaining({
+          calendarId: "primary",
+          eventId: "e1",
+          destination: "work",
+          sendUpdates: "none",
+        })
+      );
+      expect(result.id).toBe("e1");
+    });
+
+    it("should pass through sendUpdates", async () => {
+      mockEventsMove.mockResolvedValue({
+        data: { id: "e1", summary: "Party" },
+      });
+
+      await service.moveEvent("primary", "e1", "work", "all");
+
+      expect(mockEventsMove).toHaveBeenCalledWith(
+        expect.objectContaining({ sendUpdates: "all" })
       );
     });
   });
