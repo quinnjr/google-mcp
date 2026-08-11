@@ -130,6 +130,32 @@ export class CalendarService {
     };
   }
 
+  /**
+   * Permanently deletes a non-primary calendar (not an event) and
+   * everything on it. Irreversible — deletes it for every user it's
+   * shared with. Only works on calendars you own; deleting a
+   * subscribed-to calendar just unsubscribes you (use calendarList
+   * operations for that, not this).
+   *
+   * Refuses to run on the primary calendar: the API documents
+   * calendars.delete as scoped to secondary calendars only, with a
+   * separate calendars.clear endpoint for wiping a primary calendar's
+   * events — calling delete on primary is unsupported/undocumented
+   * behavior. Checks the resolved `primary` flag, not just the "primary" alias
+   * string, since the same calendar is also reachable by its real ID.
+   */
+  public async deleteCalendar(calendarId: string): Promise<void> {
+    const calendar = await this.getCalendar(calendarId);
+    if (calendar.primary) {
+      throw new Error(
+        "Refusing to delete the primary calendar: calendars.delete only supports secondary " +
+          "calendars — calling it on the primary is unsupported/undocumented behavior. Use " +
+          "calendarList operations to unsubscribe/hide it instead."
+      );
+    }
+    await this.calendar.calendars.delete({ calendarId });
+  }
+
   // Event Operations
 
   public async listEvents(

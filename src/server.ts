@@ -905,6 +905,20 @@ export class GoogleWorkspaceMCPServer {
             },
           },
           {
+            name: "calendar_delete",
+            description: "Permanently delete a calendar (not an event) and everything on it. Irreversible. Only works on calendars you own. Refuses to run on the primary calendar (use calendarList operations to unsubscribe/hide it instead).",
+            inputSchema: {
+              type: "object",
+              properties: {
+                calendarId: {
+                  type: "string",
+                  description: "Calendar ID to delete (must be a secondary calendar, not the primary)",
+                },
+              },
+              required: ["calendarId"],
+            },
+          },
+          {
             name: "calendar_get",
             description: "Get details of a specific calendar.",
             inputSchema: {
@@ -3585,6 +3599,19 @@ export class GoogleWorkspaceMCPServer {
               {
                 type: "text",
                 text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        if (name === "calendar_delete") {
+          const { calendarId } = args as { calendarId: string };
+          await this.calendar!.deleteCalendar(calendarId);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Calendar ${calendarId} deleted.`,
               },
             ],
           };

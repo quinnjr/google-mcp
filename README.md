@@ -222,6 +222,7 @@ Tokens are stored locally and will be refreshed automatically:
 | Tool | Description |
 |------|-------------|
 | `calendar_list` | List all calendars |
+| `calendar_delete` | Permanently delete a non-primary calendar and everything on it |
 | `calendar_get` | Get calendar details |
 | `calendar_list_events` | List events from calendar |
 | `calendar_get_event` | Get event details |

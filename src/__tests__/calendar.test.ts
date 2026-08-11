@@ -3,6 +3,7 @@ import type { Auth } from "googleapis";
 
 const mockCalendarListList = vi.fn();
 const mockCalendarListGet = vi.fn();
+const mockCalendarsDelete = vi.fn();
 const mockEventsList = vi.fn();
 const mockEventsGet = vi.fn();
 const mockEventsInsert = vi.fn();
@@ -17,6 +18,9 @@ vi.mock("googleapis", () => ({
       calendarList: {
         list: mockCalendarListList,
         get: mockCalendarListGet,
+      },
+      calendars: {
+        delete: mockCalendarsDelete,
       },
       events: {
         list: mockEventsList,
@@ -79,6 +83,45 @@ describe("CalendarService", () => {
       const result = await service.getCalendar("primary");
 
       expect(result.id).toBe("primary");
+    });
+  });
+
+  describe("deleteCalendar", () => {
+    it("should delete a secondary calendar", async () => {
+      mockCalendarListGet.mockResolvedValue({
+        data: { id: "cal-id@group.calendar.google.com", summary: "Work", primary: false },
+      });
+      mockCalendarsDelete.mockResolvedValue({});
+
+      await service.deleteCalendar("cal-id@group.calendar.google.com");
+
+      expect(mockCalendarsDelete).toHaveBeenCalledWith({
+        calendarId: "cal-id@group.calendar.google.com",
+      });
+    });
+
+    it("should refuse to delete the primary calendar", async () => {
+      mockCalendarListGet.mockResolvedValue({
+        data: { id: "raphael@example.com", summary: "Raphael", primary: true },
+      });
+
+      await expect(service.deleteCalendar("primary")).rejects.toThrow(
+        "Refusing to delete the primary calendar"
+      );
+
+      expect(mockCalendarsDelete).not.toHaveBeenCalled();
+    });
+
+    it("should refuse to delete the primary calendar even by its real ID, not just the \"primary\" alias", async () => {
+      mockCalendarListGet.mockResolvedValue({
+        data: { id: "raphael@example.com", summary: "Raphael", primary: true },
+      });
+
+      await expect(service.deleteCalendar("raphael@example.com")).rejects.toThrow(
+        "Refusing to delete the primary calendar"
+      );
+
+      expect(mockCalendarsDelete).not.toHaveBeenCalled();
     });
   });
 
