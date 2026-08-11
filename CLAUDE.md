@@ -93,3 +93,19 @@ import { MyService } from "../services/my-service.js";
 ## Testing
 
 Always write tests when adding new functionality. New MCP tools, service methods, or handler branches must include corresponding test cases in `src/__tests__/` in the same commit.
+
+## Branching & PR workflow
+
+Three-branch model (local to this checkout):
+
+- **`main`** — pure mirror of `upstream/main` (`quinnjr/google-mcp`). Never receives local-only commits directly. All feature branches start here: `git checkout -b feat/<name> main`.
+- **`local-dev`** — the integration branch actually built and run as the live MCP server (`node dist/index.js`). A feature only merges in once **live-verified** (a real MCP tool call against real Google APIs/data) — green automated tests are necessary but not sufficient. Mocked tests have already let real bugs through here (missing Cloud Console API enablement, stale OAuth token missing a new scope) that only live calls caught.
+- **`feat/<name>`** — one per feature/fix, pushed to `origin` (the fork) once ready, then PR'd to **`quinnjr/google-mcp`** (upstream) — not to the fork's own `main`.
+
+**Merging is the repo owner's action alone — Claude must never run `git merge` here, into `local-dev` or anywhere else.** Claude's job stops at: implement, test, verify as much as possible without merging, push the feature branch. A PR is only opened when explicitly asked, and only after live verification (or an explicit note that live verification is still pending and deferred to the owner).
+
+Before opening a PR, confirm all of:
+- [ ] Tests written in the same commit, `pnpm test` and `pnpm lint` clean
+- [ ] `README.md`'s per-domain tool table updated if a tool was added/changed/removed
+- [ ] Live-verified against the real API, or the PR body explicitly says it hasn't been and why
+- [ ] PR targets `quinnjr/google-mcp` (upstream), not the fork's own `main`, unless explicitly told otherwise
