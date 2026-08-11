@@ -903,6 +903,32 @@ export class GoogleWorkspaceMCPServer {
             },
           },
           {
+            name: "calendar_create",
+            description: "Create a new secondary calendar (not an event) owned by the user.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                summary: {
+                  type: "string",
+                  description: "Calendar name/title",
+                },
+                description: {
+                  type: "string",
+                  description: "Calendar description",
+                },
+                timeZone: {
+                  type: "string",
+                  description: "Time zone (e.g., 'Europe/Zurich'); defaults to the account's time zone",
+                },
+                location: {
+                  type: "string",
+                  description: "Geographic location of the calendar as free-form text",
+                },
+              },
+              required: ["summary"],
+            },
+          },
+          {
             name: "calendar_get",
             description: "Get details of a specific calendar.",
             inputSchema: {
@@ -3578,6 +3604,29 @@ export class GoogleWorkspaceMCPServer {
         // Google Calendar tools
         if (name === "calendar_list") {
           const result = await this.calendar!.listCalendars();
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        if (name === "calendar_create") {
+          const { summary, description, timeZone, location } = args as {
+            summary: string;
+            description?: string;
+            timeZone?: string;
+            location?: string;
+          };
+          const result = await this.calendar!.createCalendar({
+            summary,
+            description,
+            timeZone,
+            location,
+          });
           return {
             content: [
               {

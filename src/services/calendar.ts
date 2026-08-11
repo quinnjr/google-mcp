@@ -44,6 +44,13 @@ export interface CalendarInfo {
   foregroundColor?: string;
 }
 
+export interface CalendarCreateOptions {
+  summary: string;
+  description?: string;
+  timeZone?: string;
+  location?: string;
+}
+
 export interface EventCreateOptions {
   calendarId?: string;
   summary: string;
@@ -127,6 +134,29 @@ export class CalendarService {
       accessRole: response.data.accessRole || undefined,
       backgroundColor: response.data.backgroundColor || undefined,
       foregroundColor: response.data.foregroundColor || undefined,
+    };
+  }
+
+  public async createCalendar(options: CalendarCreateOptions): Promise<CalendarInfo> {
+    const response = await this.calendar.calendars.insert({
+      requestBody: {
+        summary: options.summary,
+        description: options.description,
+        timeZone: options.timeZone,
+        location: options.location,
+      },
+    });
+
+    return {
+      id: response.data.id!,
+      summary: response.data.summary || "",
+      description: response.data.description || undefined,
+      timeZone: response.data.timeZone || undefined,
+      // A freshly created calendar is always owned by the creator and not
+      // yet marked primary; calendarList metadata (primary/accessRole/colors)
+      // only exists once it's fetched via calendarList.get or listCalendars.
+      primary: false,
+      accessRole: "owner",
     };
   }
 

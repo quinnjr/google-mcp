@@ -3,6 +3,7 @@ import type { Auth } from "googleapis";
 
 const mockCalendarListList = vi.fn();
 const mockCalendarListGet = vi.fn();
+const mockCalendarsInsert = vi.fn();
 const mockEventsList = vi.fn();
 const mockEventsGet = vi.fn();
 const mockEventsInsert = vi.fn();
@@ -17,6 +18,9 @@ vi.mock("googleapis", () => ({
       calendarList: {
         list: mockCalendarListList,
         get: mockCalendarListGet,
+      },
+      calendars: {
+        insert: mockCalendarsInsert,
       },
       events: {
         list: mockEventsList,
@@ -79,6 +83,49 @@ describe("CalendarService", () => {
       const result = await service.getCalendar("primary");
 
       expect(result.id).toBe("primary");
+    });
+  });
+
+  describe("createCalendar", () => {
+    it("should create a calendar", async () => {
+      mockCalendarsInsert.mockResolvedValue({
+        data: {
+          id: "new-cal-id@group.calendar.google.com",
+          summary: "WCS Europe 2027",
+          description: "West Coast Swing events",
+          timeZone: "Europe/Zurich",
+        },
+      });
+
+      const result = await service.createCalendar({
+        summary: "WCS Europe 2027",
+        description: "West Coast Swing events",
+        timeZone: "Europe/Zurich",
+      });
+
+      expect(mockCalendarsInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({
+            summary: "WCS Europe 2027",
+            description: "West Coast Swing events",
+            timeZone: "Europe/Zurich",
+          }),
+        })
+      );
+      expect(result.id).toBe("new-cal-id@group.calendar.google.com");
+      expect(result.summary).toBe("WCS Europe 2027");
+      expect(result.accessRole).toBe("owner");
+      expect(result.primary).toBe(false);
+    });
+
+    it("should create a calendar with only a summary", async () => {
+      mockCalendarsInsert.mockResolvedValue({
+        data: { id: "minimal-cal-id", summary: "Minimal" },
+      });
+
+      const result = await service.createCalendar({ summary: "Minimal" });
+
+      expect(result.id).toBe("minimal-cal-id");
     });
   });
 
