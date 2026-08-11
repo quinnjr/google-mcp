@@ -108,4 +108,5 @@ Before opening a PR, confirm all of:
 - [ ] Tests written in the same commit, `pnpm test` and `pnpm lint` clean
 - [ ] `README.md`'s per-domain tool table updated if a tool was added/changed/removed
 - [ ] Live-verified against the real API, or the PR body explicitly says it hasn't been and why
+- [ ] Code-reviewed (e.g. `/code-review` on the branch diff) before the PR is opened against `quinnjr/google-mcp` — findings addressed or explicitly noted as accepted, not silently skipped
 - [ ] PR targets `quinnjr/google-mcp` (upstream), not the fork's own `main`, unless explicitly told otherwise
