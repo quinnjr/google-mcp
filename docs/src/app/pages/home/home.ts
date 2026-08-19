@@ -125,7 +125,7 @@ interface Service {
               </div>
               <h3 class="font-medium text-[var(--color-google-gray-900)] mb-2">Install</h3>
               <div class="code-block p-3 text-xs overflow-x-auto">
-                <code>npx &#64;pegasusheavy/google-mcp</code>
+                <code>npx &#64;google-mcp</code>
               </div>
             </div>
             <div class="bg-white google-card p-6">
@@ -193,7 +193,7 @@ interface Service {
   <span class="text-[#9cdcfe]">"mcpServers"</span>: &#123;
     <span class="text-[#9cdcfe]">"google"</span>: &#123;
       <span class="text-[#9cdcfe]">"command"</span>: <span class="text-[#ce9178]">"npx"</span>,
-      <span class="text-[#9cdcfe]">"args"</span>: [<span class="text-[#ce9178]">"&#64;pegasusheavy/google-mcp"</span>]
+      <span class="text-[#9cdcfe]">"args"</span>: [<span class="text-[#ce9178]">"&#64;google-mcp"</span>]
     &#125;
   &#125;
 &#125;</code></pre>
