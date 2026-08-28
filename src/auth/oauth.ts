@@ -357,17 +357,47 @@ export class GoogleOAuth {
         try {
           const url = new URL(req.url!, `http://localhost:${port}`);
 
-          if (url.pathname === "/oauth2callback") {
-            const code = url.searchParams.get("code");
+          // Ignore stray requests the browser makes (favicon, etc.) so they
+          // don't hang or get misreported as a failed callback.
+          if (url.pathname !== "/oauth2callback") {
+            res.writeHead(404, { "Content-Type": "text/plain" });
+            res.end("Not found");
+            return;
+          }
 
-            if (code) {
-              const { tokens } = await this.oauth2Client!.getToken(code);
-              this.oauth2Client!.setCredentials(tokens);
-              this.saveTokens(tokens);
-              this.isAuthenticated = true;
+          // Google returns ?error=... (e.g. access_denied) on consent failure.
+          // Surface it explicitly instead of the generic "No code received".
+          const oauthError = url.searchParams.get("error");
+          if (oauthError) {
+            console.error(`OAuth consent failed: ${oauthError}`);
+            res.writeHead(400, { "Content-Type": "text/html" });
+            res.end(
+              `<html><body><h1>Authentication Failed</h1><p>Google returned: ${oauthError}</p></body></html>`
+            );
+            server.close();
+            resolve(false);
+            return;
+          }
 
-              res.writeHead(200, { "Content-Type": "text/html" });
-              res.end(`
+          const code = url.searchParams.get("code");
+
+          if (code) {
+            const { tokens } = await this.oauth2Client!.getToken(code);
+            if (!tokens.refresh_token) {
+              // Without a refresh token the pooled worker can't stay
+              // authenticated. This happens when a prior consent is still
+              // active; force re-consent with prompt=consent (already set).
+              console.error(
+                "Warning: no refresh_token returned. Revoke prior access at " +
+                  "https://myaccount.google.com/permissions and re-authenticate."
+              );
+            }
+            this.oauth2Client!.setCredentials(tokens);
+            this.saveTokens(tokens);
+            this.isAuthenticated = true;
+
+            res.writeHead(200, { "Content-Type": "text/html" });
+            res.end(`
                 <html>
                   <body style="font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e;">
                     <div style="text-align: center; color: #eee;">
@@ -378,15 +408,14 @@ export class GoogleOAuth {
                 </html>
               `);
 
-              server.close();
-              resolve(true);
-            } else {
-              res.writeHead(400, { "Content-Type": "text/html" });
-              res.end("<html><body><h1>Authentication Failed</h1><p>No code received</p></body></html>");
+            server.close();
+            resolve(true);
+          } else {
+            res.writeHead(400, { "Content-Type": "text/html" });
+            res.end("<html><body><h1>Authentication Failed</h1><p>No code received</p></body></html>");
               server.close();
               resolve(false);
             }
-          }
         } catch (error) {
           console.error("OAuth callback error:", error);
           res.writeHead(500, { "Content-Type": "text/html" });
