@@ -141,6 +141,103 @@ describe("GmailService", () => {
 
       expect(result.id).toBe("msg1");
       expect(result.from).toBe("sender@example.com");
+      expect(result.body).toBe("Hello");
+    });
+
+    it("should extract body from a top-level text/plain part", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            parts: [{ mimeType: "text/plain", body: { data: Buffer.from("Plain text").toString("base64") } }],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe("Plain text");
+    });
+
+    it("should extract body nested inside multipart/alternative, alongside an attachment", async () => {
+      // Real-world shape that triggered the original bug: the top-level parts are
+      // [multipart/alternative, attachment] — neither is literally text/plain or
+      // text/html, so a shallow (non-recursive) search finds nothing and silently
+      // returns an empty body even though the message plainly has text.
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            parts: [
+              {
+                mimeType: "multipart/alternative",
+                parts: [
+                  { mimeType: "text/plain", body: { data: Buffer.from("Nested plain text").toString("base64") } },
+                  { mimeType: "text/html", body: { data: Buffer.from("<p>Nested html</p>").toString("base64") } },
+                ],
+              },
+              {
+                mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename: "spreadsheet.xlsx",
+                body: { data: Buffer.from("binary-attachment-data").toString("base64") },
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe("Nested plain text");
+    });
+
+    it("should fall back to text/html when no text/plain part exists at any depth", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            parts: [
+              {
+                mimeType: "multipart/related",
+                parts: [{ mimeType: "text/html", body: { data: Buffer.from("<p>Html only</p>").toString("base64") } }],
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe("<p>Html only</p>");
+    });
+
+    it("should return an empty body when no text part exists anywhere", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            parts: [
+              {
+                mimeType: "application/pdf",
+                filename: "doc.pdf",
+                body: { data: Buffer.from("binary-pdf-data").toString("base64") },
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe("");
     });
   });
 
@@ -276,6 +373,40 @@ describe("GmailService", () => {
 
       expect(result.id).toBe("t1");
       expect(result.messages).toHaveLength(1);
+    });
+
+    it("should extract each message's body nested inside multipart/alternative, alongside an attachment", async () => {
+      mockThreadsGet.mockResolvedValue({
+        data: {
+          id: "t1",
+          messages: [
+            {
+              id: "msg1",
+              threadId: "t1",
+              payload: {
+                headers: [],
+                parts: [
+                  {
+                    mimeType: "multipart/alternative",
+                    parts: [
+                      { mimeType: "text/plain", body: { data: Buffer.from("Nested plain text").toString("base64") } },
+                    ],
+                  },
+                  {
+                    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    filename: "spreadsheet.xlsx",
+                    body: { data: Buffer.from("binary-attachment-data").toString("base64") },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      });
+
+      const result = await service.getThread("t1");
+
+      expect(result.messages?.[0].body).toBe("Nested plain text");
     });
   });
 
