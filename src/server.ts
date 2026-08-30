@@ -1400,6 +1400,71 @@ export class GoogleWorkspaceMCPServer {
               required: ["threadId"],
             },
           },
+          {
+            name: "gmail_list_attachments",
+            description:
+              "List attachments on a Gmail message (filename, MIME type, size, and attachment ID).",
+            inputSchema: {
+              type: "object",
+              properties: {
+                messageId: {
+                  type: "string",
+                  description: "The ID of the message",
+                },
+              },
+              required: ["messageId"],
+            },
+          },
+          {
+            name: "gmail_download_attachment",
+            description: "Download a Gmail attachment to local disk and return the saved file path.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                messageId: {
+                  type: "string",
+                  description: "The ID of the message",
+                },
+                attachmentId: {
+                  type: "string",
+                  description: "The attachment ID (from gmail_list_attachments)",
+                },
+                filename: {
+                  type: "string",
+                  description: "Filename to save the attachment as (from gmail_list_attachments)",
+                },
+                downloadDir: {
+                  type: "string",
+                  description: "Directory to save into (default: ~/Downloads/google-mcp/gmail/)",
+                },
+                mimeType: {
+                  type: "string",
+                  description: "MIME type of the attachment (from gmail_list_attachments)",
+                },
+              },
+              required: ["messageId", "attachmentId", "filename"],
+            },
+          },
+          {
+            name: "gmail_download_all_attachments",
+            description:
+              "Download every attachment on a Gmail message to local disk and return the saved file paths.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                messageId: {
+                  type: "string",
+                  description: "The ID of the message",
+                },
+                downloadDir: {
+                  type: "string",
+                  description:
+                    "Directory to save into (default: ~/Downloads/google-mcp/gmail/<subject-slug>/, mimicking Gmail's own attachment-zip naming)",
+                },
+              },
+              required: ["messageId"],
+            },
+          },
 
           // People/Contacts Tools
           {
@@ -3960,6 +4025,45 @@ export class GoogleWorkspaceMCPServer {
         if (name === "gmail_get_thread") {
           const { threadId } = args as { threadId: string };
           const result = await this.gmail!.getThread(threadId);
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        if (name === "gmail_list_attachments") {
+          const { messageId } = args as { messageId: string };
+          const result = await this.gmail!.listAttachments(messageId);
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        if (name === "gmail_download_attachment") {
+          const { messageId, attachmentId, filename, downloadDir, mimeType } = args as {
+            messageId: string;
+            attachmentId: string;
+            filename: string;
+            downloadDir?: string;
+            mimeType?: string;
+          };
+          const result = await this.gmail!.downloadAttachment(
+            messageId,
+            attachmentId,
+            filename,
+            downloadDir,
+            mimeType
+          );
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        if (name === "gmail_download_all_attachments") {
+          const { messageId, downloadDir } = args as {
+            messageId: string;
+            downloadDir?: string;
+          };
+          const result = await this.gmail!.downloadAllAttachments(messageId, downloadDir);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };

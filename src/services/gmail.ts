@@ -1,4 +1,7 @@
 import { google, type gmail_v1, type Auth } from "googleapis";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 export interface GmailMessage {
   id: string;
@@ -26,6 +29,13 @@ export interface GmailThread {
   snippet?: string;
   historyId?: string;
   messages?: GmailMessage[];
+}
+
+export interface GmailAttachment {
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
 }
 
 export interface SendEmailOptions {
@@ -386,6 +396,142 @@ export class GmailService {
 
   public async getImportantEmails(maxResults = 20): Promise<GmailMessage[]> {
     return this.searchEmails("is:important", maxResults);
+  }
+
+  // Attachments
+
+  private static getAttachmentsBaseDir(): string {
+    return path.join(os.homedir(), "Downloads", "google-mcp", "gmail");
+  }
+
+  private async getMessageSubject(messageId: string): Promise<string> {
+    const response = await this.gmail.users.messages.get({
+      userId: "me",
+      id: messageId,
+      format: "metadata",
+      metadataHeaders: ["Subject"],
+    });
+    const headers = response.data.payload?.headers || [];
+    return headers.find((h) => h.name?.toLowerCase() === "subject")?.value || messageId;
+  }
+
+  // Mimics Gmail's own "Download all attachments" zip naming: lowercase,
+  // whitespace stripped. Filesystem-unsafe characters are also stripped
+  // since Gmail subjects aren't constrained to valid folder names.
+  private slugifyFolderName(subject: string): string {
+    return subject.replace(/\s+/g, "").replace(/[<>:"/\\|?*]/g, "").toLowerCase();
+  }
+
+  // Appends " (1)", " (2)", etc. before the extension until an unused path
+  // is found, so two attachments that share a filename never overwrite
+  // each other (the flat gmail_download_attachment base dir makes this a
+  // real collision, not just a theoretical one).
+  private resolveCollisionFreePath(dir: string, filename: string): string {
+    const ext = path.extname(filename);
+    const base = path.basename(filename, ext);
+
+    let candidatePath = path.join(dir, filename);
+    for (let n = 1; fs.existsSync(candidatePath); n++) {
+      candidatePath = path.join(dir, `${base} (${n})${ext}`);
+    }
+    return candidatePath;
+  }
+
+  private collectAttachmentParts(
+    parts?: gmail_v1.Schema$MessagePart[]
+  ): gmail_v1.Schema$MessagePart[] {
+    if (!parts) return [];
+    const result: gmail_v1.Schema$MessagePart[] = [];
+    for (const part of parts) {
+      if (part.filename && part.body?.attachmentId) {
+        result.push(part);
+      }
+      if (part.parts) {
+        result.push(...this.collectAttachmentParts(part.parts));
+      }
+    }
+    return result;
+  }
+
+  public async listAttachments(messageId: string): Promise<GmailAttachment[]> {
+    const response = await this.gmail.users.messages.get({
+      userId: "me",
+      id: messageId,
+      format: "full",
+    });
+
+    const parts = this.collectAttachmentParts(response.data.payload?.parts);
+
+    return parts.map((part) => ({
+      attachmentId: part.body?.attachmentId || "",
+      filename: part.filename || "unnamed",
+      mimeType: part.mimeType || "application/octet-stream",
+      size: part.body?.size || 0,
+    }));
+  }
+
+  public async downloadAttachment(
+    messageId: string,
+    attachmentId: string,
+    filename: string,
+    downloadDir?: string,
+    mimeType = "application/octet-stream"
+  ): Promise<{ path: string; filename: string; mimeType: string; size: number }> {
+    // Gmail issues a fresh attachmentId on every messages.get call, so it
+    // can't be used to look up metadata via a second list call — the caller
+    // must pass mimeType through from the gmail_list_attachments result.
+    const attachmentResponse = await this.gmail.users.messages.attachments.get({
+      userId: "me",
+      messageId,
+      id: attachmentId,
+    });
+
+    const data = attachmentResponse.data.data || "";
+    const buffer = Buffer.from(data, "base64");
+
+    const targetDir = downloadDir || GmailService.getAttachmentsBaseDir();
+    const safeFilename = path.basename(filename);
+
+    fs.mkdirSync(targetDir, { recursive: true });
+    const targetPath = this.resolveCollisionFreePath(targetDir, safeFilename);
+    fs.writeFileSync(targetPath, buffer);
+
+    return {
+      path: targetPath,
+      filename: path.basename(targetPath),
+      mimeType,
+      size: buffer.length,
+    };
+  }
+
+  public async downloadAllAttachments(
+    messageId: string,
+    downloadDir?: string
+  ): Promise<Array<{ path: string; filename: string; mimeType: string; size: number }>> {
+    const attachments = await this.listAttachments(messageId);
+
+    let targetDir = downloadDir;
+    if (!targetDir && attachments.length > 0) {
+      const subject = await this.getMessageSubject(messageId);
+      targetDir = path.join(
+        GmailService.getAttachmentsBaseDir(),
+        this.slugifyFolderName(subject)
+      );
+    }
+
+    const results: Array<{ path: string; filename: string; mimeType: string; size: number }> = [];
+    for (const attachment of attachments) {
+      const result = await this.downloadAttachment(
+        messageId,
+        attachment.attachmentId,
+        attachment.filename,
+        targetDir,
+        attachment.mimeType
+      );
+      results.push(result);
+    }
+
+    return results;
   }
 }
 
