@@ -28,6 +28,11 @@ export interface GmailThread {
   messages?: GmailMessage[];
 }
 
+export interface GmailDraft {
+  id: string;
+  message: GmailMessage;
+}
+
 export interface SendEmailOptions {
   to: string;
   subject: string;
@@ -222,6 +227,61 @@ export class GmailService {
       threadId: originalMessage.threadId,
       replyToMessageId: messageId,
     });
+  }
+
+  public async sendDraft(draftId: string): Promise<GmailMessage> {
+    const response = await this.gmail.users.drafts.send({
+      userId: "me",
+      requestBody: { id: draftId },
+    });
+
+    return this.getMessage(response.data.id!);
+  }
+
+  public async deleteDraft(draftId: string): Promise<void> {
+    await this.gmail.users.drafts.delete({
+      userId: "me",
+      id: draftId,
+    });
+  }
+
+  // Draft IDs are separate from message IDs — the only way to obtain one is
+  // via these two methods (gmail_search/gmail_get_message return message
+  // IDs, which drafts.send/drafts.delete won't accept).
+  public async listDrafts(
+    options: { maxResults?: number; pageToken?: string } = {}
+  ): Promise<{ drafts: GmailDraft[]; nextPageToken?: string }> {
+    const response = await this.gmail.users.drafts.list({
+      userId: "me",
+      maxResults: options.maxResults || 20,
+      pageToken: options.pageToken,
+    });
+
+    const drafts: GmailDraft[] = [];
+    for (const draft of response.data.drafts || []) {
+      if (draft.id && draft.message?.id) {
+        drafts.push({ id: draft.id, message: await this.getMessage(draft.message.id) });
+      }
+    }
+
+    return {
+      drafts,
+      nextPageToken: response.data.nextPageToken || undefined,
+    };
+  }
+
+  public async getDraft(draftId: string): Promise<GmailDraft> {
+    const response = await this.gmail.users.drafts.get({
+      userId: "me",
+      id: draftId,
+    });
+
+    const messageId = response.data.message?.id;
+    const emptyMessage: GmailMessage = { id: "", threadId: "" };
+    return {
+      id: response.data.id || "",
+      message: messageId ? await this.getMessage(messageId) : emptyMessage,
+    };
   }
 
   public async trashMessage(messageId: string): Promise<void> {

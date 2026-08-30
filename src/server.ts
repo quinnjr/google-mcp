@@ -1327,6 +1327,66 @@ export class GoogleWorkspaceMCPServer {
             },
           },
           {
+            name: "gmail_list_drafts",
+            description: "List existing drafts, with each draft's real draft ID (distinct from its message ID — required by gmail_send_draft/gmail_delete_draft, which gmail_search/gmail_get_message cannot provide).",
+            inputSchema: {
+              type: "object",
+              properties: {
+                maxResults: {
+                  type: "number",
+                  description: "Maximum drafts to return (default: 20)",
+                },
+                pageToken: {
+                  type: "string",
+                  description: "Token for pagination",
+                },
+              },
+              required: [],
+            },
+          },
+          {
+            name: "gmail_get_draft",
+            description: "Get a specific draft by its draft ID, including the full underlying message content.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                draftId: {
+                  type: "string",
+                  description: "The ID of the draft (from gmail_list_drafts)",
+                },
+              },
+              required: ["draftId"],
+            },
+          },
+          {
+            name: "gmail_send_draft",
+            description: "Send an existing draft by its draft ID.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                draftId: {
+                  type: "string",
+                  description: "The ID of the draft to send",
+                },
+              },
+              required: ["draftId"],
+            },
+          },
+          {
+            name: "gmail_delete_draft",
+            description: "Delete an existing draft by its draft ID.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                draftId: {
+                  type: "string",
+                  description: "The ID of the draft to delete",
+                },
+              },
+              required: ["draftId"],
+            },
+          },
+          {
             name: "gmail_mark_read",
             description: "Mark a message as read.",
             inputSchema: {
@@ -3922,6 +3982,38 @@ export class GoogleWorkspaceMCPServer {
           await this.gmail!.trashMessage(messageId);
           return {
             content: [{ type: "text", text: `Message ${messageId} moved to trash.` }],
+          };
+        }
+
+        if (name === "gmail_list_drafts") {
+          const { maxResults, pageToken } = args as { maxResults?: number; pageToken?: string };
+          const result = await this.gmail!.listDrafts({ maxResults, pageToken });
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        if (name === "gmail_get_draft") {
+          const { draftId } = args as { draftId: string };
+          const result = await this.gmail!.getDraft(draftId);
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        if (name === "gmail_send_draft") {
+          const { draftId } = args as { draftId: string };
+          const result = await this.gmail!.sendDraft(draftId);
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        if (name === "gmail_delete_draft") {
+          const { draftId } = args as { draftId: string };
+          await this.gmail!.deleteDraft(draftId);
+          return {
+            content: [{ type: "text", text: `Draft ${draftId} deleted.` }],
           };
         }
 

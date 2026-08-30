@@ -14,6 +14,10 @@ const mockMessagesModify = vi.fn();
 const mockThreadsList = vi.fn();
 const mockThreadsGet = vi.fn();
 const mockThreadsTrash = vi.fn();
+const mockDraftsSend = vi.fn();
+const mockDraftsDelete = vi.fn();
+const mockDraftsList = vi.fn();
+const mockDraftsGet = vi.fn();
 
 vi.mock("googleapis", () => ({
   google: {
@@ -37,6 +41,12 @@ vi.mock("googleapis", () => ({
           list: mockThreadsList,
           get: mockThreadsGet,
           trash: mockThreadsTrash,
+        },
+        drafts: {
+          send: mockDraftsSend,
+          delete: mockDraftsDelete,
+          list: mockDraftsList,
+          get: mockDraftsGet,
         },
       },
     }),
@@ -183,6 +193,94 @@ describe("GmailService", () => {
       await service.trashMessage("msg1");
 
       expect(mockMessagesTrash).toHaveBeenCalledWith({ userId: "me", id: "msg1" });
+    });
+  });
+
+  describe("listDrafts", () => {
+    it("should list drafts with their real draft IDs and full message content", async () => {
+      mockDraftsList.mockResolvedValue({
+        data: {
+          drafts: [{ id: "draft1", message: { id: "msg1", threadId: "t1" } }],
+          nextPageToken: "token",
+        },
+      });
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: { headers: [{ name: "To", value: "gian.catrina@gmail.com" }] },
+        },
+      });
+
+      const result = await service.listDrafts();
+
+      expect(mockDraftsList).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: "me", maxResults: 20 })
+      );
+      expect(result.drafts).toHaveLength(1);
+      expect(result.drafts[0].id).toBe("draft1");
+      expect(result.drafts[0].message.to).toBe("gian.catrina@gmail.com");
+      expect(result.nextPageToken).toBe("token");
+    });
+
+    it("should return an empty array when there are no drafts", async () => {
+      mockDraftsList.mockResolvedValue({ data: {} });
+
+      const result = await service.listDrafts();
+
+      expect(result.drafts).toEqual([]);
+    });
+  });
+
+  describe("getDraft", () => {
+    it("should get a specific draft by ID with full message content", async () => {
+      mockDraftsGet.mockResolvedValue({
+        data: { id: "draft1", message: { id: "msg1" } },
+      });
+      mockMessagesGet.mockResolvedValue({
+        data: { id: "msg1", threadId: "t1", payload: { headers: [] } },
+      });
+
+      const result = await service.getDraft("draft1");
+
+      expect(mockDraftsGet).toHaveBeenCalledWith({ userId: "me", id: "draft1" });
+      expect(result.id).toBe("draft1");
+      expect(result.message.id).toBe("msg1");
+    });
+  });
+
+  describe("sendDraft", () => {
+    it("should send an existing draft by ID", async () => {
+      mockDraftsSend.mockResolvedValue({
+        data: { id: "sent1", threadId: "t1" },
+      });
+      // sendDraft calls getMessage after sending to return the full message
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "sent1",
+          threadId: "t1",
+          labelIds: ["SENT"],
+          payload: { headers: [{ name: "Subject", value: "Test" }] },
+        },
+      });
+
+      const result = await service.sendDraft("draft1");
+
+      expect(mockDraftsSend).toHaveBeenCalledWith({
+        userId: "me",
+        requestBody: { id: "draft1" },
+      });
+      expect(result.id).toBe("sent1");
+    });
+  });
+
+  describe("deleteDraft", () => {
+    it("should delete a draft by ID", async () => {
+      mockDraftsDelete.mockResolvedValue({ data: {} });
+
+      await service.deleteDraft("draft1");
+
+      expect(mockDraftsDelete).toHaveBeenCalledWith({ userId: "me", id: "draft1" });
     });
   });
 
