@@ -244,6 +244,22 @@ export class CalendarService {
     return this.formatEvent(response.data);
   }
 
+  public async moveEvent(
+    calendarId = "primary",
+    eventId: string,
+    destination: string,
+    sendUpdates: "all" | "externalOnly" | "none" = "none"
+  ): Promise<CalendarEvent> {
+    const response = await this.calendar.events.move({
+      calendarId,
+      eventId,
+      destination,
+      sendUpdates,
+    });
+
+    return this.formatEvent(response.data);
+  }
+
   public async deleteEvent(
     calendarId = "primary",
     eventId: string,
