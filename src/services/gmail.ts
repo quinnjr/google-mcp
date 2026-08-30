@@ -39,6 +39,35 @@ export interface SendEmailOptions {
   threadId?: string;
 }
 
+// Real messages commonly nest the actual text one or more levels deep, e.g.
+// multipart/mixed [ multipart/alternative [ text/plain, text/html ], attachment ].
+// A top-level-only search finds neither part and silently returns an empty body,
+// even though the message plainly has text. Walk the whole part tree instead,
+// preferring text/plain and falling back to text/html.
+function extractBody(payload?: gmail_v1.Schema$MessagePart | null): string {
+  if (!payload) return "";
+  if (payload.body?.data) {
+    return Buffer.from(payload.body.data, "base64").toString("utf-8");
+  }
+
+  const findPart = (
+    part: gmail_v1.Schema$MessagePart,
+    mimeType: string
+  ): gmail_v1.Schema$MessagePart | undefined => {
+    if (part.mimeType === mimeType && part.body?.data) return part;
+    for (const child of part.parts || []) {
+      const found = findPart(child, mimeType);
+      if (found) return found;
+    }
+    return undefined;
+  };
+
+  const textPart = findPart(payload, "text/plain") || findPart(payload, "text/html");
+  return textPart?.body?.data
+    ? Buffer.from(textPart.body.data, "base64").toString("utf-8")
+    : "";
+}
+
 export class GmailService {
   private readonly gmail: gmail_v1.Gmail;
 
@@ -133,19 +162,7 @@ export class GmailService {
     const getHeader = (name: string): string | null | undefined =>
       headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value;
 
-    let body = "";
-    const payload = response.data.payload;
-
-    if (payload?.body?.data) {
-      body = Buffer.from(payload.body.data, "base64").toString("utf-8");
-    } else if (payload?.parts) {
-      const textPart = payload.parts.find(
-        (p) => p.mimeType === "text/plain" || p.mimeType === "text/html"
-      );
-      if (textPart?.body?.data) {
-        body = Buffer.from(textPart.body.data, "base64").toString("utf-8");
-      }
-    }
+    const body = extractBody(response.data.payload);
 
     return {
       id: response.data.id || "",
@@ -326,19 +343,7 @@ export class GmailService {
       const getHeader = (name: string): string | null | undefined =>
         headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value;
 
-      let body = "";
-      const payload = msg.payload;
-
-      if (payload?.body?.data) {
-        body = Buffer.from(payload.body.data, "base64").toString("utf-8");
-      } else if (payload?.parts) {
-        const textPart = payload.parts.find(
-          (p) => p.mimeType === "text/plain" || p.mimeType === "text/html"
-        );
-        if (textPart?.body?.data) {
-          body = Buffer.from(textPart.body.data, "base64").toString("utf-8");
-        }
-      }
+      const body = extractBody(msg.payload);
 
       messages.push({
         id: msg.id || "",
