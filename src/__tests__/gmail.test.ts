@@ -108,6 +108,39 @@ describe("GmailService", () => {
       expect(result.nextPageToken).toBe("token");
     });
 
+    it("should omit bodyHtml from list results to keep them small", async () => {
+      mockMessagesList.mockResolvedValue({
+        data: { messages: [{ id: "msg1" }] },
+      });
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            mimeType: "multipart/alternative",
+            parts: [
+              {
+                mimeType: "text/plain",
+                body: { data: Buffer.from("plain").toString("base64url") },
+              },
+              {
+                mimeType: "text/html",
+                body: {
+                  data: Buffer.from("<p>big newsletter</p>").toString("base64url"),
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.listMessages();
+
+      expect(result.messages[0].body).toBe("plain");
+      expect(result.messages[0].bodyHtml).toBeUndefined();
+    });
+
     it("should filter messages", async () => {
       mockMessagesList.mockResolvedValue({ data: { messages: [] } });
 
@@ -141,6 +174,321 @@ describe("GmailService", () => {
 
       expect(result.id).toBe("msg1");
       expect(result.from).toBe("sender@example.com");
+    });
+
+    it("should find the html body nested under multipart containers", async () => {
+      const html = "<html><body><p>Full HTML body</p></body></html>";
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            mimeType: "multipart/mixed",
+            headers: [],
+            parts: [
+              {
+                mimeType: "multipart/alternative",
+                parts: [
+                  {
+                    mimeType: "text/plain",
+                    body: { data: Buffer.from("plain").toString("base64url") },
+                  },
+                  {
+                    mimeType: "text/html",
+                    body: { data: Buffer.from(html).toString("base64url") },
+                  },
+                ],
+              },
+              { mimeType: "application/pdf", body: { attachmentId: "a1" } },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.bodyHtml).toBe(html);
+      expect(result.body).toBe("plain");
+    });
+
+    it("should fall back to the html body when there is no plain text part", async () => {
+      const html = "<p>caf\u00e9 \u2014 only html</p>";
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            mimeType: "multipart/alternative",
+            headers: [],
+            parts: [
+              {
+                mimeType: "text/html",
+                body: { data: Buffer.from(html).toString("base64url") },
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe(html);
+      expect(result.bodyHtml).toBe(html);
+    });
+
+    it("should match mime types case-insensitively", async () => {
+      const html = "<p>shouty mime type</p>";
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            mimeType: "multipart/alternative",
+            parts: [
+              {
+                mimeType: "TEXT/HTML",
+                body: { data: Buffer.from(html).toString("base64url") },
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.bodyHtml).toBe(html);
+    });
+
+    it("should ignore non-text parts that carry inline data", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            mimeType: "multipart/related",
+            parts: [
+              {
+                mimeType: "image/png",
+                body: { data: Buffer.from("binaryimagedata").toString("base64url") },
+              },
+              {
+                mimeType: "text/plain",
+                body: { data: Buffer.from("hello").toString("base64url") },
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe("hello");
+      expect(result.bodyHtml).toBeUndefined();
+    });
+
+    it("should not take the body from an attached message or attachment", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            mimeType: "multipart/mixed",
+            parts: [
+              {
+                mimeType: "text/plain",
+                body: { data: Buffer.from("see attached").toString("base64url") },
+              },
+              {
+                mimeType: "message/rfc822",
+                parts: [
+                  {
+                    mimeType: "text/html",
+                    body: {
+                      data: Buffer.from("<p>forwarded</p>").toString("base64url"),
+                    },
+                  },
+                ],
+              },
+              {
+                mimeType: "text/html",
+                filename: "notes.html",
+                body: { data: Buffer.from("<p>attached file</p>").toString("base64url") },
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe("see attached");
+      expect(result.bodyHtml).toBeUndefined();
+    });
+
+    it("should fall through to html when the plain part is only whitespace", async () => {
+      const html = "<h1>the entire newsletter</h1>";
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            mimeType: "multipart/alternative",
+            parts: [
+              {
+                mimeType: "text/plain",
+                body: { data: Buffer.from("\r\n   ").toString("base64url") },
+              },
+              {
+                mimeType: "text/html",
+                body: { data: Buffer.from(html).toString("base64url") },
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe(html);
+    });
+
+    it("should join sibling text parts rather than keeping only the first", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            mimeType: "multipart/mixed",
+            parts: [
+              {
+                mimeType: "text/plain",
+                body: {
+                  data: Buffer.from("[EXTERNAL SENDER] Use caution.").toString("base64url"),
+                },
+              },
+              {
+                mimeType: "text/plain",
+                body: { data: Buffer.from("THE ACTUAL BODY").toString("base64url") },
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe("[EXTERNAL SENDER] Use caution.\n\nTHE ACTUAL BODY");
+    });
+
+    it("should keep text subtypes other than plain and html", async () => {
+      const invite = "BEGIN:VCALENDAR\r\nEND:VCALENDAR";
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            mimeType: "text/calendar",
+            body: { data: Buffer.from(invite).toString("base64url") },
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe(invite);
+    });
+
+    it("should skip a forwarded message whatever the case of its mime type", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            mimeType: "multipart/mixed",
+            parts: [
+              {
+                mimeType: "text/plain",
+                body: { data: Buffer.from("see attached").toString("base64url") },
+              },
+              {
+                mimeType: "MESSAGE/RFC822",
+                parts: [
+                  {
+                    mimeType: "text/html",
+                    body: { data: Buffer.from("<p>SECRET</p>").toString("base64url") },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe("see attached");
+      expect(result.bodyHtml).toBeUndefined();
+    });
+
+    it("should still walk into a container that carries a filename", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            mimeType: "multipart/alternative",
+            filename: "container.eml.part",
+            parts: [
+              {
+                mimeType: "text/plain",
+                body: { data: Buffer.from("still here").toString("base64url") },
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe("still here");
+    });
+
+    it("should return an empty body when the message has no payload", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: { id: "msg1", threadId: "t1" },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe("");
+      expect(result.bodyHtml).toBeUndefined();
+    });
+
+    it("should omit bodyHtml when includeHtml is false", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            headers: [],
+            mimeType: "text/html",
+            body: { data: Buffer.from("<p>hi</p>").toString("base64url") },
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1", { includeHtml: false });
+
+      expect(result.body).toBe("");
+      expect(result.bodyHtml).toBeUndefined();
     });
   });
 
@@ -277,6 +625,44 @@ describe("GmailService", () => {
       expect(result.id).toBe("t1");
       expect(result.messages).toHaveLength(1);
     });
+
+    it("should collect nested bodies for each message in the thread", async () => {
+      const html = "<p>thread reply</p>";
+      mockThreadsGet.mockResolvedValue({
+        data: {
+          id: "t1",
+          messages: [
+            {
+              id: "msg1",
+              threadId: "t1",
+              payload: {
+                headers: [],
+                mimeType: "multipart/alternative",
+                parts: [
+                  {
+                    mimeType: "text/plain",
+                    body: { data: Buffer.from("reply text").toString("base64url") },
+                  },
+                  {
+                    mimeType: "text/html",
+                    body: { data: Buffer.from(html).toString("base64url") },
+                  },
+                ],
+              },
+            },
+            { id: "msg2", threadId: "t1", payload: { headers: [] } },
+          ],
+        },
+      });
+
+      const result = await service.getThread("t1");
+
+      expect(result.messages?.[0].body).toBe("reply text");
+      expect(result.messages?.[0].bodyHtml).toBe(html);
+      // Each message gets its own accumulator - no bleed from the one before.
+      expect(result.messages?.[1].body).toBe("");
+      expect(result.messages?.[1].bodyHtml).toBeUndefined();
+    });
   });
 
   describe("searchEmails", () => {
@@ -396,6 +782,27 @@ describe("GmailService", () => {
       expect(result.id).toBe("Label_1");
       expect(result.name).toBe("Work");
       expect(result.messagesTotal).toBe(50);
+    });
+  });
+
+  describe("header injection", () => {
+    it("should strip CR and LF from header values", async () => {
+      mockMessagesSend.mockResolvedValue({ data: { id: "sent1", threadId: "t1" } });
+      mockMessagesGet.mockResolvedValue({
+        data: { id: "sent1", threadId: "t1", payload: { headers: [] } },
+      });
+
+      await service.sendEmail({
+        to: "victim@example.com",
+        subject: "Hi\r\nBcc: attacker@evil.com",
+        body: "hello",
+      });
+
+      const { raw } = mockMessagesSend.mock.calls[0][0].requestBody;
+      const decoded = Buffer.from(raw, "base64url").toString("utf-8");
+
+      expect(decoded).toContain("Subject: Hi Bcc: attacker@evil.com");
+      expect(decoded).not.toMatch(/^Bcc: attacker@evil\.com$/m);
     });
   });
 

