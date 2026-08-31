@@ -10,6 +10,7 @@ export interface GmailMessage {
   to?: string;
   date?: string;
   body?: string;
+  bodyHtml?: string;
   isUnread?: boolean;
 }
 
@@ -38,6 +39,43 @@ export interface SendEmailOptions {
   replyToMessageId?: string;
   threadId?: string;
 }
+
+interface MessageBodies {
+  text?: string;
+  html?: string;
+}
+
+// Gmail nests bodies arbitrarily deep: a mail with an attachment is
+// multipart/mixed > multipart/alternative > text/html, so scanning only
+// payload.parts finds a multipart container, never the text, and the body
+// comes back empty. Where it did match, `find` hit text/plain first and the
+// HTML alternative was dropped entirely. Walk the whole tree and keep both.
+const collectBodies = (
+  part: gmail_v1.Schema$MessagePart | undefined,
+  found: MessageBodies = {}
+): MessageBodies => {
+  if (!part) {
+    return found;
+  }
+
+  const data = part.body?.data;
+  if (data) {
+    // base64url: Gmail encodes with - and _, which the plain base64 alphabet
+    // does not cover.
+    const decoded = Buffer.from(data, "base64url").toString("utf-8");
+    if (part.mimeType === "text/html") {
+      found.html ??= decoded;
+    } else if (part.mimeType === "text/plain" || !part.mimeType) {
+      found.text ??= decoded;
+    }
+  }
+
+  for (const child of part.parts || []) {
+    collectBodies(child, found);
+  }
+
+  return found;
+};
 
 export class GmailService {
   private readonly gmail: gmail_v1.Gmail;
@@ -133,19 +171,7 @@ export class GmailService {
     const getHeader = (name: string): string | null | undefined =>
       headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value;
 
-    let body = "";
-    const payload = response.data.payload;
-
-    if (payload?.body?.data) {
-      body = Buffer.from(payload.body.data, "base64").toString("utf-8");
-    } else if (payload?.parts) {
-      const textPart = payload.parts.find(
-        (p) => p.mimeType === "text/plain" || p.mimeType === "text/html"
-      );
-      if (textPart?.body?.data) {
-        body = Buffer.from(textPart.body.data, "base64").toString("utf-8");
-      }
-    }
+    const bodies = collectBodies(response.data.payload);
 
     return {
       id: response.data.id || "",
@@ -156,7 +182,8 @@ export class GmailService {
       from: getHeader("From") || undefined,
       to: getHeader("To") || undefined,
       date: getHeader("Date") || undefined,
-      body,
+      body: bodies.text ?? bodies.html ?? "",
+      bodyHtml: bodies.html,
       isUnread: response.data.labelIds?.includes("UNREAD"),
     };
   }
@@ -326,19 +353,7 @@ export class GmailService {
       const getHeader = (name: string): string | null | undefined =>
         headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value;
 
-      let body = "";
-      const payload = msg.payload;
-
-      if (payload?.body?.data) {
-        body = Buffer.from(payload.body.data, "base64").toString("utf-8");
-      } else if (payload?.parts) {
-        const textPart = payload.parts.find(
-          (p) => p.mimeType === "text/plain" || p.mimeType === "text/html"
-        );
-        if (textPart?.body?.data) {
-          body = Buffer.from(textPart.body.data, "base64").toString("utf-8");
-        }
-      }
+      const bodies = collectBodies(msg.payload);
 
       messages.push({
         id: msg.id || "",
@@ -349,7 +364,8 @@ export class GmailService {
         from: getHeader("From") || undefined,
         to: getHeader("To") || undefined,
         date: getHeader("Date") || undefined,
-        body,
+        body: bodies.text ?? bodies.html ?? "",
+        bodyHtml: bodies.html,
         isUnread: msg.labelIds?.includes("UNREAD"),
       });
     }

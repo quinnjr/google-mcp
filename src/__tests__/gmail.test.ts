@@ -142,6 +142,66 @@ describe("GmailService", () => {
       expect(result.id).toBe("msg1");
       expect(result.from).toBe("sender@example.com");
     });
+
+    it("should find the html body nested under multipart containers", async () => {
+      const html = "<html><body><p>Full HTML body</p></body></html>";
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            mimeType: "multipart/mixed",
+            headers: [],
+            parts: [
+              {
+                mimeType: "multipart/alternative",
+                parts: [
+                  {
+                    mimeType: "text/plain",
+                    body: { data: Buffer.from("plain").toString("base64url") },
+                  },
+                  {
+                    mimeType: "text/html",
+                    body: { data: Buffer.from(html).toString("base64url") },
+                  },
+                ],
+              },
+              { mimeType: "application/pdf", body: { attachmentId: "a1" } },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.bodyHtml).toBe(html);
+      expect(result.body).toBe("plain");
+    });
+
+    it("should fall back to the html body when there is no plain text part", async () => {
+      const html = "<p>caf\u00e9 \u2014 only html</p>";
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg1",
+          threadId: "t1",
+          payload: {
+            mimeType: "multipart/alternative",
+            headers: [],
+            parts: [
+              {
+                mimeType: "text/html",
+                body: { data: Buffer.from(html).toString("base64url") },
+              },
+            ],
+          },
+        },
+      });
+
+      const result = await service.getMessage("msg1");
+
+      expect(result.body).toBe(html);
+      expect(result.bodyHtml).toBe(html);
+    });
   });
 
   describe("sendEmail", () => {
