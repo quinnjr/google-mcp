@@ -108,6 +108,87 @@ describe("PeopleService", () => {
       expect(result.displayName).toBe("Jane Doe");
       expect(result.emails?.[0].value).toBe("jane@example.com");
     });
+    it("should map addresses, organizations, birthdays, notes and photos", async () => {
+      mockPeopleGet.mockResolvedValue({
+        data: {
+          resourceName: "people/c456",
+          etag: "etag-1",
+          names: [{ displayName: "Ada Lovelace", givenName: "Ada", familyName: "Lovelace" }],
+          phoneNumbers: [{ value: "+15551234567", type: "mobile" }],
+          addresses: [
+            {
+              formattedValue: "1 Analytical Way, London, UK",
+              type: "home",
+              streetAddress: "1 Analytical Way",
+              city: "London",
+              region: "Greater London",
+              postalCode: "E1 6AN",
+              country: "UK",
+            },
+          ],
+          organizations: [{ name: "Analytical Engine Co", title: "Mathematician", department: "R&D" }],
+          birthdays: [{ date: { year: 1815, month: 12, day: 10 } }],
+          biographies: [{ value: "First programmer", metadata: { primary: true } }],
+          photos: [{ url: "https://example.com/ada.jpg" }],
+        },
+      });
+
+      const result = await service.getContact("people/c456");
+
+      expect(result.etag).toBe("etag-1");
+      expect(result.givenName).toBe("Ada");
+      expect(result.familyName).toBe("Lovelace");
+      expect(result.phoneNumbers?.[0]).toEqual({ value: "+15551234567", type: "mobile" });
+      expect(result.addresses?.[0]).toEqual({
+        formattedValue: "1 Analytical Way, London, UK",
+        type: "home",
+        streetAddress: "1 Analytical Way",
+        city: "London",
+        region: "Greater London",
+        postalCode: "E1 6AN",
+        country: "UK",
+      });
+      expect(result.organizations?.[0]).toEqual({
+        name: "Analytical Engine Co",
+        title: "Mathematician",
+        department: "R&D",
+      });
+      expect(result.birthdays?.[0]).toEqual({ date: { year: 1815, month: 12, day: 10 } });
+      expect(result.notes).toBe("First programmer");
+      expect(result.photos?.[0]).toEqual({ url: "https://example.com/ada.jpg" });
+    });
+
+    it("should drop text-only birthdays that carry no structured date", async () => {
+      mockPeopleGet.mockResolvedValue({
+        data: {
+          resourceName: "people/c789",
+          names: [{ displayName: "No Birthday" }],
+          birthdays: [{ text: "sometime in spring" }, { date: { month: 4, day: 2 } }],
+        },
+      });
+
+      const result = await service.getContact("people/c789");
+
+      expect(result.birthdays).toEqual([{ date: { year: undefined, month: 4, day: 2 } }]);
+    });
+
+    it("should drop memberships that carry no contact group resource name", async () => {
+      mockPeopleGet.mockResolvedValue({
+        data: {
+          resourceName: "people/c999",
+          names: [{ displayName: "Partial Memberships" }],
+          memberships: [
+            { contactGroupMembership: { contactGroupResourceName: "contactGroups/friends" } },
+            { contactGroupMembership: {} },
+            { domainMembership: { inViewerDomain: true } },
+          ],
+        },
+      });
+
+      const result = await service.getContact("people/c999");
+
+      expect(result.memberships).toEqual([{ contactGroupResourceName: "contactGroups/friends" }]);
+    });
   });
 
   describe("createContact", () => {
@@ -189,6 +270,46 @@ describe("PeopleService", () => {
       const call = mockPeopleUpdateContact.mock.calls[0][0];
       expect(call.updatePersonFields).toContain("names");
       expect(call.requestBody.names[0].familyName).toBe("");
+    });
+
+    it("should send organization and biographies when organization and notes are provided", async () => {
+      mockPeopleUpdateContact.mockResolvedValue({
+        data: { resourceName: "people/c123", names: [{ displayName: "Org Person" }] },
+      });
+
+      await service.updateContact({
+        resourceName: "people/c123",
+        etag: "etag-9",
+        organization: { name: "Analytical Engine Co", title: "Mathematician" },
+        notes: "Met at the conference",
+      });
+
+      const call = mockPeopleUpdateContact.mock.calls[0][0];
+      expect(call.requestBody.organizations).toEqual([
+        { name: "Analytical Engine Co", title: "Mathematician" },
+      ]);
+      expect(call.requestBody.biographies).toEqual([
+        { value: "Met at the conference", contentType: "TEXT_PLAIN" },
+      ]);
+      const fields = call.updatePersonFields.split(",");
+      expect(fields).toContain("organizations");
+      expect(fields).toContain("biographies");
+    });
+
+    it("should update biographies when notes is an empty string (clearing notes)", async () => {
+      mockPeopleUpdateContact.mockResolvedValue({
+        data: { resourceName: "people/c123", names: [{ displayName: "Cleared Notes" }] },
+      });
+
+      await service.updateContact({
+        resourceName: "people/c123",
+        etag: "etag-10",
+        notes: "",
+      });
+
+      const call = mockPeopleUpdateContact.mock.calls[0][0];
+      expect(call.requestBody.biographies).toEqual([{ value: "", contentType: "TEXT_PLAIN" }]);
+      expect(call.updatePersonFields.split(",")).toContain("biographies");
     });
 
     it("should include emailAddresses and phoneNumbers in updatePersonFields when provided", async () => {
