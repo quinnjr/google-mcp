@@ -100,8 +100,11 @@ export default tseslint.config(
     },
   },
   {
-    // Ignore built files
-    ignores: ["dist/**", "node_modules/**", "*.js"],
+    // Ignore built and generated files, plus the docs/ sub-project, which
+    // has its own package.json, tsconfig and lint setup. Anything outside
+    // this tsconfig's project makes the type-aware parser error out rather
+    // than skip the file, which is what made `pnpm lint` fail outright.
+    ignores: ["dist/**", "node_modules/**", "coverage/**", "docs/**", "*.js"],
   }
 );
 

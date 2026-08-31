@@ -5,6 +5,67 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-08-31
+
+### Breaking
+
+- `DriveService.downloadFile` returns a `DriveDownloadResult` record
+  (`{ name, mimeType, size, content?, encoding?, path? }`) instead of a bare
+  string. A caller that wrote the old return value straight to disk was
+  getting `"[object Object]"` after this change, hence the major bump.
+
+  ```ts
+  // before
+  const text = await drive.downloadFile(id);
+  // after
+  const { content } = await drive.downloadFile(id);
+  ```
+
+- `DriveService.uploadFile` takes one options object instead of four
+  positional arguments.
+
+  ```ts
+  // before
+  await drive.uploadFile("notes.txt", "hello", "text/plain", folderId);
+  // after
+  await drive.uploadFile({ name: "notes.txt", content: "hello", mimeType: "text/plain", folderId });
+  ```
+
+- `DriveService.updateFile`'s second argument is a file source, not a string.
+
+  ```ts
+  // before
+  await drive.updateFile(fileId, "new contents", "text/plain");
+  // after
+  await drive.updateFile(fileId, { content: "new contents", mimeType: "text/plain" });
+  ```
+
+- `drive_download_file` always returns a JSON record now, where it previously
+  returned bare file text. The record says whether `content` is text or
+  base64, which the old shape could not.
+
+### Added
+
+- Gmail attachments: `gmail_send` and `gmail_reply` accept an `attachments`
+  array, messages returned by `gmail_get_message` carry an `attachments`
+  array, and `gmail_get_attachment` downloads one.
+- Drive binary transfer: `drive_download_file` gains `encoding`, `savePath`
+  and `exportMimeType` (export a Doc as PDF or DOCX); `drive_upload_file`
+  gains `path` and `encoding`.
+- `drive_update_file` exposes the previously unreachable `updateFile` method.
+- A sandbox root for all local file access, `GOOGLE_MCP_FILE_ROOT`, defaulting
+  to `~/Downloads/google-mcp`. See "Local Files" in the README.
+
+### Fixed
+
+- Drive downloads and uploads no longer corrupt binary files. Both directions
+  went over a UTF-8 text channel, which replaced every invalid byte.
+- Request timeouts on the binary transfer paths, so a stalled socket fails
+  instead of hanging the tool call forever.
+- `pnpm lint` no longer fails outright after `pnpm test:coverage`: the flat
+  config ignored `dist/` but not `coverage/`, and the type-aware parser errors
+  on a file outside the tsconfig project rather than skipping it.
+
 ## [1.2.0] - 2026-08-31
 
 ### Added
