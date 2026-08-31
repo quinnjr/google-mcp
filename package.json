@@ -11,11 +11,12 @@
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",
-    "!dist/__tests__",
+    "!dist/__tests__/**",
     "README.md",
     "LICENSE"
   ],
   "publishConfig": {
+    "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
   "repository": {
@@ -29,7 +30,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "prebuild": "npm run clean",
+    "prebuild": "pnpm clean",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest",
@@ -37,7 +38,7 @@
     "test:ui": "vitest --ui",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "prepublishOnly": "npm run lint && npm run test:coverage && npm run build"
+    "prepublishOnly": "pnpm lint && pnpm test:coverage && pnpm build"
   },
   "keywords": [
     "mcp",
