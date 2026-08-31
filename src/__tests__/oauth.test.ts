@@ -268,6 +268,84 @@ describe("GoogleOAuth", () => {
       expect(result).toBe(true);
       expect(oauth.isReady()).toBe(true);
     });
+
+    it("should return false when the token exchange is rejected", async () => {
+      vi.mocked(fs.existsSync).mockImplementation((p) =>
+        String(p).includes("credentials.json")
+      );
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({
+        installed: { client_id: "id", client_secret: "secret", redirect_uris: ["http://localhost"] },
+      }));
+
+      vi.resetModules();
+      const { GoogleOAuth } = await import("../auth/oauth.js");
+      const oauth = new GoogleOAuth();
+      await oauth.initialize();
+
+      const client = oauth.getClient() as unknown as MockOAuth2;
+      client.getToken.mockRejectedValueOnce(new Error("invalid_grant"));
+
+      const result = await oauth.setAuthCode("stale-code");
+
+      expect(result).toBe(false);
+      expect(oauth.isReady()).toBe(false);
+    });
+  });
+
+  describe("initializeWithAuth", () => {
+    it("should not start the interactive flow when tokens are already valid", async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockImplementation((p) =>
+        String(p).includes("credentials.json")
+          ? JSON.stringify({
+              installed: { client_id: "id", client_secret: "secret", redirect_uris: ["http://localhost"] },
+            })
+          : JSON.stringify({ access_token: "token", refresh_token: "refresh" })
+      );
+
+      vi.resetModules();
+      const { GoogleOAuth } = await import("../auth/oauth.js");
+      const oauth = new GoogleOAuth();
+
+      const authenticate = vi.spyOn(oauth, "authenticate");
+      const result = await oauth.initializeWithAuth();
+
+      expect(result).toBe(true);
+      expect(authenticate).not.toHaveBeenCalled();
+    });
+
+    it("should fall back to the interactive flow when credentials load but tokens do not", async () => {
+      vi.mocked(fs.existsSync).mockImplementation((p) =>
+        String(p).includes("credentials.json")
+      );
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({
+        installed: { client_id: "id", client_secret: "secret", redirect_uris: ["http://localhost"] },
+      }));
+
+      vi.resetModules();
+      const { GoogleOAuth } = await import("../auth/oauth.js");
+      const oauth = new GoogleOAuth();
+
+      const authenticate = vi.spyOn(oauth, "authenticate").mockResolvedValue(true);
+      const result = await oauth.initializeWithAuth();
+
+      expect(result).toBe(true);
+      expect(authenticate).toHaveBeenCalledOnce();
+    });
+
+    it("should return false without ever authenticating when credentials are missing", async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      vi.resetModules();
+      const { GoogleOAuth } = await import("../auth/oauth.js");
+      const oauth = new GoogleOAuth();
+
+      const authenticate = vi.spyOn(oauth, "authenticate");
+      const result = await oauth.initializeWithAuth();
+
+      expect(result).toBe(false);
+      expect(authenticate).not.toHaveBeenCalled();
+    });
   });
 
   describe("logout", () => {

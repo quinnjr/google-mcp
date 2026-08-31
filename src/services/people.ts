@@ -366,15 +366,18 @@ export class PeopleService {
         title: o.title || undefined,
         department: o.department || undefined,
       })),
-      birthdays: person.birthdays?.map((b) => ({
-        date: b.date
-          ? {
-              year: b.date.year || undefined,
-              month: b.date.month || undefined,
-              day: b.date.day || undefined,
-            }
-          : undefined,
-      })),
+      // The API also returns text-only birthdays (a "text" label with no
+      // structured date). Those carry nothing this shape can express, so drop
+      // them rather than emitting { date: undefined } entries.
+      birthdays: person.birthdays
+        ?.filter((b) => b.date)
+        .map((b) => ({
+          date: {
+            year: b.date!.year || undefined,
+            month: b.date!.month || undefined,
+            day: b.date!.day || undefined,
+          },
+        })),
       notes: primaryBio?.value || undefined,
       photos: person.photos?.map((p) => ({ url: p.url || undefined })),
       memberships: person.memberships
