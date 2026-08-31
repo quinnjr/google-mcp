@@ -169,13 +169,12 @@ import { RouterLink } from '@angular/router';
 
           <div class="google-card p-6">
             <h3 class="font-medium text-[var(--color-google-gray-900)] mb-3">Add to MCP Settings</h3>
-            <p class="text-[var(--color-google-gray-600)] mb-4">Add to your Cursor or Claude Desktop configuration:</p>
+            <p class="text-[var(--color-google-gray-600)] mb-4">Start the server, then add its SSE endpoint to your Cursor or Claude Desktop configuration:</p>
             <div class="code-block p-4">
               <pre class="text-sm overflow-x-auto"><code>&#123;
   "mcpServers": &#123;
     "google": &#123;
-      "command": "npx",
-      "args": ["&#64;google-mcp"]
+      "url": "http://127.0.0.1:3015/sse"
     &#125;
   &#125;
 &#125;</code></pre>

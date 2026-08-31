@@ -192,8 +192,7 @@ interface Service {
 &#123;
   <span class="text-[#9cdcfe]">"mcpServers"</span>: &#123;
     <span class="text-[#9cdcfe]">"google"</span>: &#123;
-      <span class="text-[#9cdcfe]">"command"</span>: <span class="text-[#ce9178]">"npx"</span>,
-      <span class="text-[#9cdcfe]">"args"</span>: [<span class="text-[#ce9178]">"&#64;google-mcp"</span>]
+      <span class="text-[#9cdcfe]">"url"</span>: <span class="text-[#ce9178]">"http://127.0.0.1:3015/sse"</span>
     &#125;
   &#125;
 &#125;</code></pre>

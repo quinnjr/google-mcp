@@ -168,31 +168,35 @@ The file should look like:
 
 ## Usage with Cursor/Claude
 
+The server runs as a long-lived SSE worker, not as a stdio subprocess. Start it
+once, then point clients at its `/sse` endpoint.
+
+Start the worker:
+
+```bash
+node /path/to/google-mcp/dist/index.js
+# or from the project directory:
+pnpm dev
+```
+
+It listens on `127.0.0.1:3015` by default. Override with `GOOGLE_MCP_HOST` and
+`GOOGLE_MCP_PORT` (or `PORT`).
+
 Add to your MCP settings configuration:
 
 ```json
 {
   "mcpServers": {
     "google": {
-      "command": "node",
-      "args": ["/path/to/google-mcp/dist/index.js"]
+      "url": "http://127.0.0.1:3015/sse"
     }
   }
 }
 ```
 
-Or if running from the project directory:
-
-```json
-{
-  "mcpServers": {
-    "google": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/google-mcp/src/index.ts"]
-    }
-  }
-}
-```
+Every client that connects gets its own MCP session while sharing one
+authenticated Google session, so you only complete the OAuth flow once no
+matter how many clients or agents attach.
 
 ## Authentication
 
