@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "bin": {
-    "google-mcp": "./dist/index.js"
+    "google-mcp": "dist/index.js"
   },
   "files": [
     "dist/**/*.js",
