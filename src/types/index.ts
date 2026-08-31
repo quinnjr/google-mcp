@@ -209,13 +209,71 @@ export const TaskUpdateOptionsSchema = z.object({
 
 export const DriveDownloadSchema = z.object({
   fileId: z.string().min(1),
+  savePath: z.string().min(1).optional(),
+  encoding: z.enum(["text", "base64"]).optional(),
+  exportMimeType: z.string().optional(),
 });
 
-export const DriveUploadSchema = z.object({
-  name: z.string().min(1),
-  content: z.string(),
+// Exactly one of `content` or `path`. The rule lives here rather than only in
+// resolveFileSource so zod rejects it at the edge with a message naming the
+// field, and so every schema built on it inherits the same contract.
+const fileSourceShape = {
+  content: z.string().optional(),
+  encoding: z.enum(["text", "base64"]).optional(),
+  path: z.string().min(1).optional(),
+  filename: z.string().min(1).optional(),
   mimeType: z.string().optional(),
-  folderId: z.string().optional(),
+};
+
+const exactlyOneSource = (value: { content?: string; path?: string }): boolean =>
+  (value.content !== undefined) !== (value.path !== undefined);
+
+const ONE_SOURCE_MESSAGE =
+  "Provide exactly one of `content` (inline) or `path` (local file).";
+
+export const FileSourceSchema = z
+  .object(fileSourceShape)
+  .refine(exactlyOneSource, { message: ONE_SOURCE_MESSAGE });
+
+export const DriveUploadSchema = z
+  .object({
+    ...fileSourceShape,
+    name: z.string().min(1).optional(),
+    folderId: z.string().optional(),
+  })
+  .refine(exactlyOneSource, { message: ONE_SOURCE_MESSAGE });
+
+export const DriveUpdateFileSchema = z
+  .object({
+    ...fileSourceShape,
+    fileId: z.string().min(1),
+  })
+  .refine(exactlyOneSource, { message: ONE_SOURCE_MESSAGE });
+
+export const GmailGetAttachmentSchema = z.object({
+  messageId: z.string().min(1),
+  attachmentId: z.string().min(1),
+  savePath: z.string().min(1).optional(),
+});
+
+// The send/reply handlers used to cast `args` and validate only the new
+// attachments array, leaving every address field unchecked in the same
+// handler that had just been hardened against header injection.
+export const GmailSendSchema = z.object({
+  to: z.string().min(1),
+  subject: z.string(),
+  body: z.string(),
+  cc: z.string().optional(),
+  bcc: z.string().optional(),
+  isHtml: z.boolean().optional(),
+  attachments: z.array(FileSourceSchema).optional(),
+});
+
+export const GmailReplySchema = z.object({
+  messageId: z.string().min(1),
+  body: z.string(),
+  isHtml: z.boolean().optional(),
+  attachments: z.array(FileSourceSchema).optional(),
 });
 
 export const DriveDeleteSchema = z.object({

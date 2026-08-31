@@ -35,7 +35,8 @@ A comprehensive Model Context Protocol (MCP) server for Google integration, prov
 
 ### Google Gmail
 - Read, search, and list emails
-- Send emails and reply to threads
+- Send emails and reply to threads, with file attachments
+- List and download attachments on received messages
 - Mark as read/unread, trash messages
 - List labels and organize emails
 
@@ -46,7 +47,9 @@ A comprehensive Model Context Protocol (MCP) server for Google integration, prov
 
 ### Google Drive
 - List, search, and browse files and folders
-- Upload, download, copy, move, and delete files
+- Upload, download, copy, move, and delete files, text or binary
+- Replace the contents of an existing file
+- Export Google Workspace files to other formats (PDF, DOCX, CSV, ...)
 - Create folders
 - Rename files
 
@@ -212,6 +215,29 @@ Tokens are stored locally and will be refreshed automatically:
 - **macOS:** `~/Library/Application Support/google-mcp/tokens.json`
 - **Windows:** `%APPDATA%\google-mcp\tokens.json`
 
+## Local Files
+
+Tools that read a local file (`path`) or write one (`savePath`) resolve every
+path inside a single sandbox directory, defaulting to `~/Downloads/google-mcp`.
+Relative paths are taken from that root; absolute paths must fall inside it.
+
+This matters because the arguments come from a model that may have just read a
+hostile email. Without a boundary, an injected "attach `~/.ssh/id_rsa`" is an
+exfiltration primitive and an injected `savePath` of `~/.ssh/authorized_keys`
+is code execution. Inside the sandbox both are inert.
+
+```bash
+export GOOGLE_MCP_FILE_ROOT="$HOME/Documents/mcp-files"
+```
+
+Regardless of the root, the server refuses to touch key and credential
+directories (`.ssh`, `.aws`, `.gnupg`, ...) or files that look like secrets
+(`*.pem`, `*.key`, `tokens.json`, `credentials.json`, `.env*`), does not follow
+symlinks out of the root, and never overwrites an existing file.
+
+Inline transfers are capped at 1 MB, since they land in the model's context;
+pass `savePath` for anything larger, up to 25 MB.
+
 ## Available Tools
 
 ### Authentication
@@ -246,6 +272,7 @@ Tokens are stored locally and will be refreshed automatically:
 | `gmail_get_message` | Get specific email |
 | `gmail_send` | Send an email |
 | `gmail_reply` | Reply to an email |
+| `gmail_get_attachment` | Download an attachment from a message |
 | `gmail_trash` | Move to trash |
 | `gmail_mark_read` | Mark as read |
 | `gmail_mark_unread` | Mark as unread |
@@ -268,8 +295,9 @@ Tokens are stored locally and will be refreshed automatically:
 |------|-------------|
 | `drive_list_files` | List files with filtering |
 | `drive_get_file` | Get file metadata |
-| `drive_download_file` | Download file content |
+| `drive_download_file` | Download file content, text or binary |
 | `drive_upload_file` | Upload a new file |
+| `drive_update_file` | Replace an existing file's contents |
 | `drive_delete_file` | Delete a file |
 | `drive_create_folder` | Create a new folder |
 | `drive_search` | Search files by content |

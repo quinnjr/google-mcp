@@ -1,4 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { google, type gmail_v1, type Auth } from "googleapis";
+import {
+  DEFAULT_MIME_TYPE,
+  MAX_INLINE_BYTES,
+  REQUEST_TIMEOUT_MS,
+  assertSavePath,
+  assertTotalSize,
+  resolveFileSource,
+  safeMimeType,
+  saveTo,
+  type FileSource,
+} from "./attachments.js";
 
 export interface GmailMessage {
   id: string;
@@ -12,6 +24,33 @@ export interface GmailMessage {
   body?: string;
   bodyHtml?: string;
   isUnread?: boolean;
+  attachments?: GmailAttachment[];
+}
+
+export interface GmailAttachment {
+  /**
+   * Pass to getAttachment() to fetch the bytes. Absent when the part carried
+   * its data inline, in which case `data` holds it already.
+   */
+  attachmentId?: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  /** Base64 bytes, for a small part Gmail returned inline rather than by id. */
+  data?: string;
+}
+
+export interface GmailAttachmentOptions {
+  /** Write the bytes here instead of returning them. */
+  savePath?: string;
+}
+
+export interface GmailAttachmentContent {
+  size: number;
+  /** Base64 bytes. Present unless savePath was given. */
+  data?: string;
+  /** Absolute path written, when savePath was given. */
+  path?: string;
 }
 
 export interface GmailLabel {
@@ -38,6 +77,7 @@ export interface SendEmailOptions {
   isHtml?: boolean;
   replyToMessageId?: string;
   threadId?: string;
+  attachments?: FileSource[];
 }
 
 interface MessageBodies {
@@ -48,6 +88,7 @@ interface MessageBodies {
   // The first other text/* subtype (text/calendar, Apple Mail's
   // text/watch-html), used only when there is nothing better.
   other?: string;
+  attachments: GmailAttachment[];
 }
 
 // Header values are interpolated into a raw RFC 822 message, so a CR or LF in
@@ -57,6 +98,29 @@ interface MessageBodies {
 // blind-copy the reply.
 const headerValue = (value: string): string =>
   value.replace(/[\r\n]+/g, " ").trim();
+
+// A filename lands inside a quoted header parameter, so on top of the CRLF
+// strip it must not carry a quote or backslash of its own.
+const quotedParam = (value: string): string =>
+  headerValue(value).replace(/["\\]/g, "_");
+
+// RFC 5322 headers are 7-bit, so a name like "resume\u0301.pdf" cannot go in
+// literally. Emit an ASCII-folded `filename` for old clients plus the RFC 2231
+// `filename*` form that carries the real one.
+const dispositionParams = (filename: string): string => {
+  const name = quotedParam(filename);
+  const ascii = name.replace(/[^\x20-\x7E]/g, "_");
+  const params = `filename="${ascii}"`;
+  return ascii === name
+    ? params
+    : `${params}; filename*=UTF-8''${encodeURIComponent(name)}`;
+};
+
+// RFC 2045 caps an encoded line at 76 characters. Gmail tolerates one long
+// line, other MTAs in the path do not. The lookahead keeps the last group
+// from picking up a trailing break, which would emit a stray blank line.
+const base64Lines = (data: Buffer): string =>
+  data.toString("base64").replace(/(.{76})(?=.)/g, "$1\r\n");
 
 // Which collected body to hand back as `body`. A plain-text alternative that
 // is only whitespace is a placeholder, not content - treating it as the body
@@ -90,7 +154,7 @@ export class GmailService {
   private collectBodies(
     root: gmail_v1.Schema$MessagePart | undefined
   ): MessageBodies {
-    const found: MessageBodies = {};
+    const found: MessageBodies = { attachments: [] };
     const plain: string[] = [];
     const stack: gmail_v1.Schema$MessagePart[] = root ? [root] : [];
 
@@ -113,6 +177,24 @@ export class GmailService {
       // An attachment is not the body - but it can still be a container, so
       // skip only the recording and keep walking its children.
       const data = part.body?.data;
+      // Gmail usually hands back an attachmentId, but a small part can carry
+      // its bytes inline instead. Recording only the former reported such a
+      // message as having no attachment at all - the data was in hand and
+      // thrown away, since the body collector skips anything with a filename.
+      if (part.filename) {
+        const inline = part.body?.attachmentId ? undefined : data;
+        found.attachments.push({
+          attachmentId: part.body?.attachmentId || undefined,
+          filename: part.filename,
+          mimeType: part.mimeType || DEFAULT_MIME_TYPE,
+          size:
+            part.body?.size ||
+            (inline ? Buffer.from(inline, "base64url").byteLength : 0),
+          data: inline
+            ? Buffer.from(inline, "base64url").toString("base64")
+            : undefined,
+        });
+      }
       if (data && !part.filename) {
         const decoded = Buffer.from(data, "base64url").toString("utf-8");
         if (mimeType === "text/html") {
@@ -168,6 +250,7 @@ export class GmailService {
       body: preferredBody(bodies, includeHtml),
       bodyHtml: includeHtml ? bodies.html : undefined,
       isUnread: msg.labelIds?.includes("UNREAD"),
+      attachments: bodies.attachments.length > 0 ? bodies.attachments : undefined,
     };
   }
 
@@ -276,14 +359,55 @@ export class GmailService {
       messageParts.push(`Bcc: ${headerValue(options.bcc)}`);
     }
 
-    if (options.isHtml) {
-      messageParts.push("Content-Type: text/html; charset=utf-8");
-    } else {
-      messageParts.push("Content-Type: text/plain; charset=utf-8");
-    }
+    const bodyContentType = options.isHtml
+      ? "Content-Type: text/html; charset=utf-8"
+      : "Content-Type: text/plain; charset=utf-8";
 
-    messageParts.push("");
-    messageParts.push(options.body);
+    // Promise.all rejects with whichever error lost the race and discards the
+    // rest, so each read names its own attachment before it can propagate.
+    const files = await Promise.all(
+      (options.attachments || []).map((source, index) =>
+        resolveFileSource(
+          source,
+          "base64",
+          `attachment[${index}]${source.filename ? ` (${source.filename})` : ""}`
+        )
+      )
+    );
+    // The per-file cap alone still lets three 20 MB files reach Gmail's 35 MB
+    // raw limit, which is the opaque 413 the cap exists to avoid.
+    assertTotalSize(files);
+
+    if (files.length === 0) {
+      messageParts.push(bodyContentType, "", options.body);
+    } else {
+      // multipart/mixed, body first: a client that cannot render the parts
+      // still shows the message text rather than an empty mail.
+      const boundary = `----=_gmcp_${randomUUID()}`;
+      messageParts.push(
+        "MIME-Version: 1.0",
+        `Content-Type: multipart/mixed; boundary="${boundary}"`,
+        "",
+        `--${boundary}`,
+        bodyContentType,
+        "",
+        options.body
+      );
+
+      for (const file of files) {
+        const params = dispositionParams(file.filename);
+        messageParts.push(
+          `--${boundary}`,
+          `Content-Type: ${safeMimeType(file.mimeType, DEFAULT_MIME_TYPE)}; ${params}`,
+          `Content-Disposition: attachment; ${params}`,
+          "Content-Transfer-Encoding: base64",
+          "",
+          base64Lines(file.data)
+        );
+      }
+
+      messageParts.push(`--${boundary}--`);
+    }
 
     const rawMessage = Buffer.from(messageParts.join("\r\n"))
       .toString("base64")
@@ -299,10 +423,10 @@ export class GmailService {
       requestBody.threadId = options.threadId;
     }
 
-    const response = await this.gmail.users.messages.send({
-      userId: "me",
-      requestBody,
-    });
+    const response = await this.gmail.users.messages.send(
+      { userId: "me", requestBody },
+      { timeout: REQUEST_TIMEOUT_MS }
+    );
 
     return this.getMessage(response.data.id!);
   }
@@ -310,7 +434,8 @@ export class GmailService {
   public async replyToEmail(
     messageId: string,
     body: string,
-    isHtml = false
+    isHtml = false,
+    attachments?: FileSource[]
   ): Promise<GmailMessage> {
     const originalMessage = await this.getMessage(messageId);
 
@@ -323,7 +448,56 @@ export class GmailService {
       isHtml,
       threadId: originalMessage.threadId,
       replyToMessageId: messageId,
+      attachments,
     });
+  }
+
+  // Attachments
+
+  /**
+   * Fetch one attachment's bytes. Without `savePath` the data comes back
+   * base64-encoded in the result; with it, the file is written to disk and
+   * only the path is returned - a 5 MB PDF has no business being inlined
+   * into a tool response.
+   */
+  public async getAttachment(
+    messageId: string,
+    attachmentId: string,
+    options: GmailAttachmentOptions = {}
+  ): Promise<GmailAttachmentContent> {
+    if (options.savePath) {
+      await assertSavePath(options.savePath);
+    }
+
+    const response = await this.gmail.users.messages.attachments.get(
+      { userId: "me", messageId, id: attachmentId },
+      { timeout: REQUEST_TIMEOUT_MS }
+    );
+
+    // Gmail omits `data` for attachments past its inline threshold. Defaulting
+    // to "" would hand back a zero-byte file and call it a success.
+    const encoded = response.data.data;
+    if (encoded === undefined || encoded === null) {
+      throw new Error(
+        `Gmail returned no data for attachment ${attachmentId}; it may be too large to fetch this way.`
+      );
+    }
+
+    // Gmail returns base64url, which is not what a caller decoding base64
+    // expects and is not what writeFile needs either.
+    const buffer = Buffer.from(encoded, "base64url");
+
+    if (options.savePath) {
+      return { size: buffer.byteLength, path: await saveTo(options.savePath, buffer) };
+    }
+
+    if (buffer.byteLength > MAX_INLINE_BYTES) {
+      throw new Error(
+        `Attachment is ${buffer.byteLength} bytes, over the ${MAX_INLINE_BYTES} byte inline limit. Pass savePath to write it to disk instead.`
+      );
+    }
+
+    return { size: buffer.byteLength, data: buffer.toString("base64") };
   }
 
   public async trashMessage(messageId: string): Promise<void> {
