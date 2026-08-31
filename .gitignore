@@ -148,3 +148,4 @@ credentials.json
 tokens.json
 
 unsaved-contacts.json
+.worktrees/
