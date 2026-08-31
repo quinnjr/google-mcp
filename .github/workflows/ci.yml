@@ -25,9 +25,14 @@ jobs:
       # Version comes from the packageManager field in package.json.
       - uses: pnpm/action-setup@v6
 
+      # 22, not 20: pnpm 11 imports node:sqlite and refuses to start on
+      # anything below 22.13. This is the toolchain's floor, not the package's
+      # - engines.node stays at >=20.19.0 because that is all the published
+      # dist actually needs. The tradeoff is that CI no longer exercises the
+      # oldest Node we claim to support.
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
