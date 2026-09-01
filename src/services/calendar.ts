@@ -101,16 +101,7 @@ export class CalendarService {
       maxResults: 250,
     });
 
-    return (response.data.items || []).map((cal) => ({
-      id: cal.id!,
-      summary: cal.summary || "",
-      description: cal.description || undefined,
-      timeZone: cal.timeZone || undefined,
-      primary: cal.primary || false,
-      accessRole: cal.accessRole || undefined,
-      backgroundColor: cal.backgroundColor || undefined,
-      foregroundColor: cal.foregroundColor || undefined,
-    }));
+    return (response.data.items || []).map((cal) => this.formatCalendarInfo(cal));
   }
 
   public async getCalendar(calendarId: string): Promise<CalendarInfo> {
@@ -118,16 +109,7 @@ export class CalendarService {
       calendarId,
     });
 
-    return {
-      id: response.data.id!,
-      summary: response.data.summary || "",
-      description: response.data.description || undefined,
-      timeZone: response.data.timeZone || undefined,
-      primary: response.data.primary || false,
-      accessRole: response.data.accessRole || undefined,
-      backgroundColor: response.data.backgroundColor || undefined,
-      foregroundColor: response.data.foregroundColor || undefined,
-    };
+    return this.formatCalendarInfo(response.data);
   }
 
   /**
@@ -142,16 +124,7 @@ export class CalendarService {
       requestBody: { id: calendarId },
     });
 
-    return {
-      id: response.data.id!,
-      summary: response.data.summary || "",
-      description: response.data.description || undefined,
-      timeZone: response.data.timeZone || undefined,
-      primary: response.data.primary || false,
-      accessRole: response.data.accessRole || undefined,
-      backgroundColor: response.data.backgroundColor || undefined,
-      foregroundColor: response.data.foregroundColor || undefined,
-    };
+    return this.formatCalendarInfo(response.data);
   }
 
   /**
@@ -380,6 +353,19 @@ export class CalendarService {
     });
 
     return events;
+  }
+
+  private formatCalendarInfo(entry: calendar_v3.Schema$CalendarListEntry): CalendarInfo {
+    return {
+      id: entry.id!,
+      summary: entry.summary || "",
+      description: entry.description || undefined,
+      timeZone: entry.timeZone || undefined,
+      primary: entry.primary || false,
+      accessRole: entry.accessRole || undefined,
+      backgroundColor: entry.backgroundColor || undefined,
+      foregroundColor: entry.foregroundColor || undefined,
+    };
   }
 
   private formatEvent(event: calendar_v3.Schema$Event): CalendarEvent {
