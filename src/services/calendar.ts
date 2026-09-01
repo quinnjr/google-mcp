@@ -130,6 +130,42 @@ export class CalendarService {
     };
   }
 
+  /**
+   * Subscribes the user to an existing calendar they don't own — a public
+   * or shared calendar (e.g. someone else's public Google Calendar, an
+   * org's event calendar) identified by its calendar ID. Adds it to
+   * calendarList so it shows up alongside owned calendars; does not create
+   * a new calendar or copy events.
+   */
+  public async subscribeCalendar(calendarId: string): Promise<CalendarInfo> {
+    const response = await this.calendar.calendarList.insert({
+      requestBody: { id: calendarId },
+    });
+
+    return {
+      id: response.data.id!,
+      summary: response.data.summary || "",
+      description: response.data.description || undefined,
+      timeZone: response.data.timeZone || undefined,
+      primary: response.data.primary || false,
+      accessRole: response.data.accessRole || undefined,
+      backgroundColor: response.data.backgroundColor || undefined,
+      foregroundColor: response.data.foregroundColor || undefined,
+    };
+  }
+
+  /**
+   * Removes a calendar from the user's own calendarList — the "unsubscribe"
+   * action in the Calendar UI. For a calendar the user doesn't own, this is
+   * a true unsubscribe with no side effects elsewhere. For a calendar the
+   * user *does* own, calendarList.delete still removes it from their own
+   * list/UI (though not from other users it's shared with, and not
+   * permanently — re-subscribing via subscribeCalendar restores it).
+   */
+  public async unsubscribeCalendar(calendarId: string): Promise<void> {
+    await this.calendar.calendarList.delete({ calendarId });
+  }
+
   // Event Operations
 
   public async listEvents(
