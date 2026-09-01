@@ -3,6 +3,8 @@ import type { Auth } from "googleapis";
 
 const mockCalendarListList = vi.fn();
 const mockCalendarListGet = vi.fn();
+const mockCalendarListInsert = vi.fn();
+const mockCalendarListDelete = vi.fn();
 const mockEventsList = vi.fn();
 const mockEventsGet = vi.fn();
 const mockEventsInsert = vi.fn();
@@ -17,6 +19,8 @@ vi.mock("googleapis", () => ({
       calendarList: {
         list: mockCalendarListList,
         get: mockCalendarListGet,
+        insert: mockCalendarListInsert,
+        delete: mockCalendarListDelete,
       },
       events: {
         list: mockEventsList,
@@ -79,6 +83,40 @@ describe("CalendarService", () => {
       const result = await service.getCalendar("primary");
 
       expect(result.id).toBe("primary");
+    });
+  });
+
+  describe("subscribeCalendar", () => {
+    it("should subscribe to an existing calendar by ID", async () => {
+      mockCalendarListInsert.mockResolvedValue({
+        data: {
+          id: "c_biplus@group.calendar.google.com",
+          summary: "Verein Bisexuell Schweiz",
+          accessRole: "reader",
+          selected: true,
+        },
+      });
+
+      const result = await service.subscribeCalendar("c_biplus@group.calendar.google.com");
+
+      expect(mockCalendarListInsert).toHaveBeenCalledWith({
+        requestBody: { id: "c_biplus@group.calendar.google.com" },
+      });
+      expect(result.id).toBe("c_biplus@group.calendar.google.com");
+      expect(result.summary).toBe("Verein Bisexuell Schweiz");
+      expect(result.accessRole).toBe("reader");
+    });
+  });
+
+  describe("unsubscribeCalendar", () => {
+    it("should unsubscribe from a calendar by ID", async () => {
+      mockCalendarListDelete.mockResolvedValue({});
+
+      await service.unsubscribeCalendar("c_biplus@group.calendar.google.com");
+
+      expect(mockCalendarListDelete).toHaveBeenCalledWith({
+        calendarId: "c_biplus@group.calendar.google.com",
+      });
     });
   });
 

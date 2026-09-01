@@ -990,6 +990,37 @@ export class GoogleWorkspaceMCPServer {
             },
           },
           {
+            name: "calendar_subscribe",
+            description:
+              "Subscribe to an existing calendar you don't own — a public or shared Google Calendar (e.g. an organization's public event calendar) identified by its calendar ID — so it appears alongside your own calendars. Does not create a new calendar or copy events.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                calendarId: {
+                  type: "string",
+                  description:
+                    "Calendar ID to subscribe to (e.g. 'c_xxxx@group.calendar.google.com'), often found as the 'cid' in a calendar's public iCal/subscribe link",
+                },
+              },
+              required: ["calendarId"],
+            },
+          },
+          {
+            name: "calendar_unsubscribe",
+            description:
+              "Remove a calendar from your own calendar list — the 'unsubscribe' action in the Calendar UI. For a calendar you don't own, this is a true unsubscribe with no other effects. For a calendar you DO own, this still hides it from your own list/UI (though it stays intact for anyone it's shared with, and re-subscribing via calendar_subscribe restores it).",
+            inputSchema: {
+              type: "object",
+              properties: {
+                calendarId: {
+                  type: "string",
+                  description: "Calendar ID to unsubscribe from",
+                },
+              },
+              required: ["calendarId"],
+            },
+          },
+          {
             name: "calendar_get",
             description: "Get details of a specific calendar.",
             inputSchema: {
@@ -3694,6 +3725,32 @@ export class GoogleWorkspaceMCPServer {
               {
                 type: "text",
                 text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        if (name === "calendar_subscribe") {
+          const { calendarId } = args as { calendarId: string };
+          const result = await this.calendar!.subscribeCalendar(calendarId);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        if (name === "calendar_unsubscribe") {
+          const { calendarId } = args as { calendarId: string };
+          await this.calendar!.unsubscribeCalendar(calendarId);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Unsubscribed from calendar ${calendarId}.`,
               },
             ],
           };
