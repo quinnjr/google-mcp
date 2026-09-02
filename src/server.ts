@@ -149,11 +149,22 @@ export class GoogleWorkspaceMCPServer {
     }
   }
 
-  private ensureAuthenticated(): void {
+  private async ensureAuthenticated(): Promise<void> {
     if (!oauth.isReady()) {
       throw new Error(
         "Not authenticated. Please authenticate first using the google_auth tool or place credentials at " +
           oauth.getCredentialsPath()
+      );
+    }
+    // Long-lived pooled worker: the access token expires (~1h) while the
+    // process stays up for hours. Refresh from the refresh_token before serving
+    // rather than letting a stale-token API call drop into interactive browser
+    // auth that can't render in a headless context (LBP-32).
+    const fresh = await oauth.ensureFreshToken();
+    if (!fresh) {
+      throw new Error(
+        "Google session expired and could not be refreshed automatically. " +
+          "Re-authenticate using the google_auth tool."
       );
     }
     if (!this.drive) {
@@ -3134,7 +3145,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         // All other tools require authentication
-        this.ensureAuthenticated();
+        await this.ensureAuthenticated();
 
         // Google Drive tools
         if (name === "drive_list_files") {
@@ -4423,7 +4434,7 @@ export class GoogleWorkspaceMCPServer {
 
         // Google Forms handlers
         if (name === "forms_create") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { title, documentTitle, description } = args as {
             title: string;
             documentTitle?: string;
@@ -4436,7 +4447,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "forms_get") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { formId } = args as { formId: string };
           const form = await this.forms!.getForm(formId);
           return {
@@ -4445,7 +4456,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "forms_update_info") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { formId, title, description } = args as {
             formId: string;
             title?: string;
@@ -4458,7 +4469,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "forms_add_question") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { formId, title, description, required, index, questionType, options, scaleConfig } = args as {
             formId: string;
             title: string;
@@ -4485,7 +4496,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "forms_delete_item") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { formId, itemIndex } = args as { formId: string; itemIndex: number };
           await this.forms!.deleteItem(formId, itemIndex);
           return {
@@ -4494,7 +4505,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "forms_list_responses") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { formId, pageSize, pageToken } = args as {
             formId: string;
             pageSize?: number;
@@ -4507,7 +4518,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "forms_get_response") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { formId, responseId } = args as { formId: string; responseId: string };
           const response = await this.forms!.getResponse(formId, responseId);
           return {
@@ -4516,7 +4527,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "forms_add_page_break") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { formId, title, index } = args as { formId: string; title: string; index?: number };
           const item = await this.forms!.addPageBreak(formId, title, index);
           return {
@@ -4525,7 +4536,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "forms_add_text") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { formId, title, description, index } = args as {
             formId: string;
             title: string;
@@ -4539,7 +4550,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "forms_add_image") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { formId, sourceUri, title, altText, index } = args as {
             formId: string;
             sourceUri: string;
@@ -4554,7 +4565,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "forms_add_video") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { formId, youtubeUri, title, caption, index } = args as {
             formId: string;
             youtubeUri: string;
@@ -4570,7 +4581,7 @@ export class GoogleWorkspaceMCPServer {
 
         // Google Chat handlers
         if (name === "chat_list_spaces") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { pageSize, pageToken } = args as { pageSize?: number; pageToken?: string };
           const result = await this.chat!.listSpaces(pageSize, pageToken);
           return {
@@ -4579,7 +4590,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_get_space") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { spaceName } = args as { spaceName: string };
           const space = await this.chat!.getSpace(spaceName);
           return {
@@ -4588,7 +4599,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_create_space") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { displayName, spaceType, externalUserAllowed, description, guidelines } = args as {
             displayName: string;
             spaceType?: "SPACE" | "GROUP_CHAT" | "DIRECT_MESSAGE";
@@ -4608,7 +4619,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_delete_space") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { spaceName } = args as { spaceName: string };
           await this.chat!.deleteSpace(spaceName);
           return {
@@ -4617,7 +4628,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_list_messages") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { spaceName, pageSize, pageToken, filter, orderBy } = args as {
             spaceName: string;
             pageSize?: number;
@@ -4632,7 +4643,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_get_message") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { messageName } = args as { messageName: string };
           const message = await this.chat!.getMessage(messageName);
           return {
@@ -4641,7 +4652,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_send_message") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { spaceName, text, threadKey } = args as {
             spaceName: string;
             text: string;
@@ -4654,7 +4665,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_update_message") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { messageName, text } = args as { messageName: string; text: string };
           const message = await this.chat!.updateMessage({ messageName, text });
           return {
@@ -4663,7 +4674,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_delete_message") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { messageName, force } = args as { messageName: string; force?: boolean };
           await this.chat!.deleteMessage(messageName, force);
           return {
@@ -4672,7 +4683,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_list_members") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { spaceName, pageSize, pageToken } = args as {
             spaceName: string;
             pageSize?: number;
@@ -4685,7 +4696,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_add_member") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { spaceName, userId, role } = args as {
             spaceName: string;
             userId: string;
@@ -4698,7 +4709,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_remove_member") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { memberName } = args as { memberName: string };
           await this.chat!.removeMember(memberName);
           return {
@@ -4707,7 +4718,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "chat_add_reaction") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { messageName, emoji } = args as { messageName: string; emoji: string };
           await this.chat!.addReaction(messageName, emoji);
           return {
@@ -4717,7 +4728,7 @@ export class GoogleWorkspaceMCPServer {
 
         // Google Meet handlers
         if (name === "meet_create_space") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { accessType, entryPointAccess } = args as {
             accessType?: "OPEN" | "TRUSTED" | "RESTRICTED";
             entryPointAccess?: "ALL" | "CREATOR_APP_ONLY";
@@ -4729,7 +4740,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_get_space") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { spaceName } = args as { spaceName: string };
           const space = await this.meet!.getSpace(spaceName);
           return {
@@ -4738,7 +4749,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_end_conference") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { spaceName } = args as { spaceName: string };
           await this.meet!.endActiveConference(spaceName);
           return {
@@ -4747,7 +4758,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_schedule") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { summary, description, startTime, endTime, attendees, timeZone, sendUpdates } = args as {
             summary: string;
             description?: string;
@@ -4772,7 +4783,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_create_instant") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const meeting = await this.meet!.createInstantMeeting();
           return {
             content: [{ type: "text", text: JSON.stringify(meeting, null, 2) }],
@@ -4780,7 +4791,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_get_by_event") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { eventId } = args as { eventId: string };
           const meeting = await this.meet!.getMeetingByCalendarEvent(eventId);
           return {
@@ -4789,7 +4800,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_list_upcoming") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { days } = args as { days?: number };
           const meetings = await this.meet!.listUpcomingMeetings(days);
           return {
@@ -4798,7 +4809,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_list_conference_records") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { pageSize, pageToken, filter } = args as {
             pageSize?: number;
             pageToken?: string;
@@ -4811,7 +4822,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_get_conference_record") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { recordName } = args as { recordName: string };
           const record = await this.meet!.getConferenceRecord(recordName);
           return {
@@ -4820,7 +4831,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_list_participants") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { conferenceRecordName, pageSize, pageToken } = args as {
             conferenceRecordName: string;
             pageSize?: number;
@@ -4833,7 +4844,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_list_recordings") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { conferenceRecordName, pageSize, pageToken } = args as {
             conferenceRecordName: string;
             pageSize?: number;
@@ -4846,7 +4857,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_get_recording") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { recordingName } = args as { recordingName: string };
           const recording = await this.meet!.getRecording(recordingName);
           return {
@@ -4855,7 +4866,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_list_transcripts") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { conferenceRecordName, pageSize, pageToken } = args as {
             conferenceRecordName: string;
             pageSize?: number;
@@ -4868,7 +4879,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_get_transcript") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { transcriptName } = args as { transcriptName: string };
           const transcript = await this.meet!.getTranscript(transcriptName);
           return {
@@ -4877,7 +4888,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "meet_list_transcript_entries") {
-          this.ensureAuthenticated();
+          await this.ensureAuthenticated();
           const { transcriptName, pageSize, pageToken } = args as {
             transcriptName: string;
             pageSize?: number;
