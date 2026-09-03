@@ -69,7 +69,9 @@ describe("DocsService", () => {
         data: { documentId: "doc1", title: "Doc" },
       });
       mockFilesGet.mockResolvedValue({ data: { parents: [] } });
-      mockFilesUpdate.mockResolvedValue({ data: {} });
+      mockFilesUpdate.mockResolvedValue({
+        data: { id: "doc1", name: "Doc", mimeType: "application/vnd.google-apps.document" },
+      });
 
       await service.createDocument("Doc", undefined, "folder1");
 

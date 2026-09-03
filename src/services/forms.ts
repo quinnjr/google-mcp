@@ -640,8 +640,11 @@ export class FormsService {
   }
 
   private formatForm(form: forms_v1.Schema$Form): FormInfo {
+    if (!form.formId) {
+      throw new Error("Forms API returned a form without a formId.");
+    }
     return {
-      formId: form.formId!,
+      formId: form.formId,
       title: form.info?.title || "",
       description: form.info?.description || undefined,
       documentTitle: form.info?.documentTitle || undefined,

@@ -428,8 +428,15 @@ export class GoogleOAuth {
       }
     }
 
+    const oauth2Client = this.oauth2Client;
+    if (!oauth2Client) {
+      throw new Error(
+        "OAuth client is not configured. Place valid credentials before authenticating."
+      );
+    }
+
     return new Promise((resolve) => {
-      const authUrl = this.oauth2Client!.generateAuthUrl({
+      const authUrl = oauth2Client.generateAuthUrl({
         access_type: "offline",
         scope: SCOPES,
         prompt: "consent",
@@ -438,7 +445,7 @@ export class GoogleOAuth {
       // Create a temporary server to handle the OAuth callback
       const server = http.createServer(async (req, res) => {
         try {
-          const url = new URL(req.url!, `http://localhost:${port}`);
+          const url = new URL(req.url ?? "/", `http://localhost:${port}`);
 
           // Ignore stray requests the browser makes (favicon, etc.) so they
           // don't hang or get misreported as a failed callback.
@@ -465,7 +472,7 @@ export class GoogleOAuth {
           const code = url.searchParams.get("code");
 
           if (code) {
-            const { tokens } = await this.oauth2Client!.getToken(code);
+            const { tokens } = await oauth2Client.getToken(code);
             if (!tokens.refresh_token) {
               // Without a refresh token the pooled worker can't stay
               // authenticated. This happens when a prior consent is still
@@ -475,7 +482,7 @@ export class GoogleOAuth {
                   "https://myaccount.google.com/permissions and re-authenticate."
               );
             }
-            this.oauth2Client!.setCredentials(tokens);
+            oauth2Client.setCredentials(tokens);
             this.saveTokens(tokens);
             this.isAuthenticated = true;
 

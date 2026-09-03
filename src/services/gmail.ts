@@ -428,7 +428,10 @@ export class GmailService {
       { timeout: REQUEST_TIMEOUT_MS }
     );
 
-    return this.getMessage(response.data.id!);
+    if (!response.data.id) {
+      throw new Error("Gmail API did not return a message id for the sent message.");
+    }
+    return this.getMessage(response.data.id);
   }
 
   public async replyToEmail(

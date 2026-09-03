@@ -87,7 +87,10 @@ export class SlidesService {
       },
     });
 
-    const presentationId = response.data.presentationId!;
+    const presentationId = response.data.presentationId;
+    if (!presentationId) {
+      throw new Error("Slides API did not return a presentationId for the created presentation.");
+    }
 
     // Move to folder if specified
     if (options.folderId) {

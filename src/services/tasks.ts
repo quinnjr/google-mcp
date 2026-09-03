@@ -8,6 +8,50 @@ import { type TaskList, type Task } from "../types/index.js";
  * The Google Tasks API is used as a similar alternative for managing
  * notes and task lists. Tasks can include notes/descriptions.
  */
+/**
+ * Maps a Tasks API task-list resource to our TaskList shape. The SDK types
+ * id/title as nullable; our TaskList requires them, so a resource missing
+ * either is malformed and throws rather than coercing a null into a string.
+ */
+const toTaskList = (item: tasks_v1.Schema$TaskList): TaskList => {
+  if (!item.id || !item.title) {
+    throw new Error(
+      `Tasks API returned a task list missing a required field (id/title): ${JSON.stringify(
+        { id: item.id, title: item.title }
+      )}`
+    );
+  }
+  return {
+    id: item.id,
+    title: item.title,
+    updated: item.updated || undefined,
+  };
+};
+
+/**
+ * Maps a Tasks API task resource to our Task shape, guarding the required
+ * id/title fields the SDK types as nullable.
+ */
+const toTask = (item: tasks_v1.Schema$Task): Task => {
+  if (!item.id || !item.title) {
+    throw new Error(
+      `Tasks API returned a task missing a required field (id/title): ${JSON.stringify(
+        { id: item.id, title: item.title }
+      )}`
+    );
+  }
+  return {
+    id: item.id,
+    title: item.title,
+    notes: item.notes || undefined,
+    status: (item.status as "needsAction" | "completed") || "needsAction",
+    due: item.due || undefined,
+    completed: item.completed || undefined,
+    parent: item.parent || undefined,
+    position: item.position || undefined,
+  };
+};
+
 export class TasksService {
   private readonly tasks: tasks_v1.Tasks;
 
@@ -22,11 +66,7 @@ export class TasksService {
       maxResults: 100,
     });
 
-    return (response.data.items || []).map((item) => ({
-      id: item.id!,
-      title: item.title!,
-      updated: item.updated || undefined,
-    }));
+    return (response.data.items || []).map(toTaskList);
   }
 
   public async getTaskList(taskListId: string): Promise<TaskList> {
@@ -34,11 +74,7 @@ export class TasksService {
       tasklist: taskListId,
     });
 
-    return {
-      id: response.data.id!,
-      title: response.data.title!,
-      updated: response.data.updated || undefined,
-    };
+    return toTaskList(response.data);
   }
 
   public async createTaskList(title: string): Promise<TaskList> {
@@ -46,11 +82,7 @@ export class TasksService {
       requestBody: { title },
     });
 
-    return {
-      id: response.data.id!,
-      title: response.data.title!,
-      updated: response.data.updated || undefined,
-    };
+    return toTaskList(response.data);
   }
 
   public async updateTaskList(taskListId: string, title: string): Promise<TaskList> {
@@ -59,11 +91,7 @@ export class TasksService {
       requestBody: { title },
     });
 
-    return {
-      id: response.data.id!,
-      title: response.data.title!,
-      updated: response.data.updated || undefined,
-    };
+    return toTaskList(response.data);
   }
 
   public async deleteTaskList(taskListId: string): Promise<void> {
@@ -93,16 +121,7 @@ export class TasksService {
       pageToken: options.pageToken,
     });
 
-    const tasks: Task[] = (response.data.items || []).map((item) => ({
-      id: item.id!,
-      title: item.title!,
-      notes: item.notes || undefined,
-      status: (item.status as "needsAction" | "completed") || "needsAction",
-      due: item.due || undefined,
-      completed: item.completed || undefined,
-      parent: item.parent || undefined,
-      position: item.position || undefined,
-    }));
+    const tasks: Task[] = (response.data.items || []).map(toTask);
 
     return {
       tasks,
@@ -116,16 +135,7 @@ export class TasksService {
       task: taskId,
     });
 
-    return {
-      id: response.data.id!,
-      title: response.data.title!,
-      notes: response.data.notes || undefined,
-      status: (response.data.status as "needsAction" | "completed") || "needsAction",
-      due: response.data.due || undefined,
-      completed: response.data.completed || undefined,
-      parent: response.data.parent || undefined,
-      position: response.data.position || undefined,
-    };
+    return toTask(response.data);
   }
 
   public async createTask(
@@ -147,16 +157,7 @@ export class TasksService {
       parent: options.parent,
     });
 
-    return {
-      id: response.data.id!,
-      title: response.data.title!,
-      notes: response.data.notes || undefined,
-      status: (response.data.status as "needsAction" | "completed") || "needsAction",
-      due: response.data.due || undefined,
-      completed: response.data.completed || undefined,
-      parent: response.data.parent || undefined,
-      position: response.data.position || undefined,
-    };
+    return toTask(response.data);
   }
 
   public async updateTask(
@@ -184,16 +185,7 @@ export class TasksService {
       },
     });
 
-    return {
-      id: response.data.id!,
-      title: response.data.title!,
-      notes: response.data.notes || undefined,
-      status: (response.data.status as "needsAction" | "completed") || "needsAction",
-      due: response.data.due || undefined,
-      completed: response.data.completed || undefined,
-      parent: response.data.parent || undefined,
-      position: response.data.position || undefined,
-    };
+    return toTask(response.data);
   }
 
   public async deleteTask(taskListId: string, taskId: string): Promise<void> {
@@ -226,16 +218,7 @@ export class TasksService {
       previous: options.previous,
     });
 
-    return {
-      id: response.data.id!,
-      title: response.data.title!,
-      notes: response.data.notes || undefined,
-      status: (response.data.status as "needsAction" | "completed") || "needsAction",
-      due: response.data.due || undefined,
-      completed: response.data.completed || undefined,
-      parent: response.data.parent || undefined,
-      position: response.data.position || undefined,
-    };
+    return toTask(response.data);
   }
 
   public async clearCompletedTasks(taskListId: string): Promise<void> {

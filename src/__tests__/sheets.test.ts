@@ -436,8 +436,8 @@ describe("SheetsService", () => {
       mockFilesList.mockResolvedValue({
         data: {
           files: [
-            { id: "sheet1", name: "Sheet 1", modifiedTime: "2024-01-01" },
-            { id: "sheet2", name: "Sheet 2", modifiedTime: "2024-01-02" },
+            { id: "sheet1", name: "Sheet 1", mimeType: "application/vnd.google-apps.spreadsheet", modifiedTime: "2024-01-01" },
+            { id: "sheet2", name: "Sheet 2", mimeType: "application/vnd.google-apps.spreadsheet", modifiedTime: "2024-01-02" },
           ],
           nextPageToken: "token",
         },

@@ -61,7 +61,9 @@ describe("SlidesService", () => {
         data: { presentationId: "pres123", title: "Test", slides: [] },
       });
       mockFilesGet.mockResolvedValue({ data: { parents: [] } });
-      mockFilesUpdate.mockResolvedValue({ data: {} });
+      mockFilesUpdate.mockResolvedValue({
+        data: { id: "pres1", name: "Presentation", mimeType: "application/vnd.google-apps.presentation" },
+      });
 
       await service.createPresentation({ title: "Test", folderId: "folder123" });
 

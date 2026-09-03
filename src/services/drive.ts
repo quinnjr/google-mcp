@@ -48,6 +48,39 @@ const DEFAULT_EXPORTS: Record<string, string> = {
   "application/vnd.google-apps.presentation": "text/plain",
 };
 
+/**
+ * Maps a Drive API file resource to our DriveFile shape.
+ *
+ * The Drive SDK types id/name/mimeType as `string | null | undefined`, but our
+ * DriveFile requires them. A response missing any of the three is malformed;
+ * throw a clear error naming the file rather than asserting non-null and
+ * risking a downstream `undefined` masquerading as a string.
+ */
+const toDriveFile = (file: drive_v3.Schema$File): DriveFile => {
+  if (!file.id || !file.name || !file.mimeType) {
+    throw new Error(
+      `Drive returned a file missing a required field (id/name/mimeType): ${JSON.stringify(
+        { id: file.id, name: file.name, mimeType: file.mimeType }
+      )}`
+    );
+  }
+
+  return {
+    id: file.id,
+    name: file.name,
+    mimeType: file.mimeType,
+    parents: file.parents || undefined,
+    webViewLink: file.webViewLink || undefined,
+    createdTime: file.createdTime || undefined,
+    modifiedTime: file.modifiedTime || undefined,
+    size: file.size || undefined,
+    owners: file.owners?.map((o) => ({
+      displayName: o.displayName || "",
+      emailAddress: o.emailAddress || "",
+    })),
+  };
+};
+
 export class DriveService {
   private readonly drive: drive_v3.Drive;
 
@@ -79,20 +112,7 @@ export class DriveService {
       fields: "nextPageToken, files(id, name, mimeType, parents, webViewLink, createdTime, modifiedTime, size, owners)",
     });
 
-    const files: DriveFile[] = (response.data.files || []).map((file) => ({
-      id: file.id!,
-      name: file.name!,
-      mimeType: file.mimeType!,
-      parents: file.parents || undefined,
-      webViewLink: file.webViewLink || undefined,
-      createdTime: file.createdTime || undefined,
-      modifiedTime: file.modifiedTime || undefined,
-      size: file.size || undefined,
-      owners: file.owners?.map((o) => ({
-        displayName: o.displayName || "",
-        emailAddress: o.emailAddress || "",
-      })),
-    }));
+    const files: DriveFile[] = (response.data.files || []).map(toDriveFile);
 
     return {
       files,
@@ -106,20 +126,7 @@ export class DriveService {
       fields: "id, name, mimeType, parents, webViewLink, createdTime, modifiedTime, size, owners",
     });
 
-    return {
-      id: response.data.id!,
-      name: response.data.name!,
-      mimeType: response.data.mimeType!,
-      parents: response.data.parents || undefined,
-      webViewLink: response.data.webViewLink || undefined,
-      createdTime: response.data.createdTime || undefined,
-      modifiedTime: response.data.modifiedTime || undefined,
-      size: response.data.size || undefined,
-      owners: response.data.owners?.map((o) => ({
-        displayName: o.displayName || "",
-        emailAddress: o.emailAddress || "",
-      })),
-    };
+    return toDriveFile(response.data);
   }
 
   public async downloadFile(
@@ -248,15 +255,7 @@ export class DriveService {
       fields: "id, name, mimeType, parents, webViewLink, createdTime, modifiedTime",
     }, { timeout: REQUEST_TIMEOUT_MS });
 
-    return {
-      id: response.data.id!,
-      name: response.data.name!,
-      mimeType: response.data.mimeType!,
-      parents: response.data.parents || undefined,
-      webViewLink: response.data.webViewLink || undefined,
-      createdTime: response.data.createdTime || undefined,
-      modifiedTime: response.data.modifiedTime || undefined,
-    };
+    return toDriveFile(response.data);
   }
 
   public async updateFile(
@@ -274,15 +273,7 @@ export class DriveService {
       fields: "id, name, mimeType, parents, webViewLink, createdTime, modifiedTime",
     }, { timeout: REQUEST_TIMEOUT_MS });
 
-    return {
-      id: response.data.id!,
-      name: response.data.name!,
-      mimeType: response.data.mimeType!,
-      parents: response.data.parents || undefined,
-      webViewLink: response.data.webViewLink || undefined,
-      createdTime: response.data.createdTime || undefined,
-      modifiedTime: response.data.modifiedTime || undefined,
-    };
+    return toDriveFile(response.data);
   }
 
   public async deleteFile(fileId: string): Promise<void> {
@@ -301,15 +292,7 @@ export class DriveService {
       fields: "id, name, mimeType, parents, webViewLink, createdTime, modifiedTime",
     });
 
-    return {
-      id: response.data.id!,
-      name: response.data.name!,
-      mimeType: response.data.mimeType!,
-      parents: response.data.parents || undefined,
-      webViewLink: response.data.webViewLink || undefined,
-      createdTime: response.data.createdTime || undefined,
-      modifiedTime: response.data.modifiedTime || undefined,
-    };
+    return toDriveFile(response.data);
   }
 
   public async search(query: string, pageSize = 50, pageToken?: string): Promise<{
@@ -324,16 +307,7 @@ export class DriveService {
       fields: "nextPageToken, files(id, name, mimeType, parents, webViewLink, createdTime, modifiedTime, size)",
     });
 
-    const files: DriveFile[] = (response.data.files || []).map((file) => ({
-      id: file.id!,
-      name: file.name!,
-      mimeType: file.mimeType!,
-      parents: file.parents || undefined,
-      webViewLink: file.webViewLink || undefined,
-      createdTime: file.createdTime || undefined,
-      modifiedTime: file.modifiedTime || undefined,
-      size: file.size || undefined,
-    }));
+    const files: DriveFile[] = (response.data.files || []).map(toDriveFile);
 
     return {
       files,
@@ -357,15 +331,7 @@ export class DriveService {
       fields: "id, name, mimeType, parents, webViewLink, createdTime, modifiedTime",
     });
 
-    return {
-      id: response.data.id!,
-      name: response.data.name!,
-      mimeType: response.data.mimeType!,
-      parents: response.data.parents || undefined,
-      webViewLink: response.data.webViewLink || undefined,
-      createdTime: response.data.createdTime || undefined,
-      modifiedTime: response.data.modifiedTime || undefined,
-    };
+    return toDriveFile(response.data);
   }
 
   public async copyFile(fileId: string, newName?: string, folderId?: string): Promise<DriveFile> {
@@ -385,15 +351,7 @@ export class DriveService {
       fields: "id, name, mimeType, parents, webViewLink, createdTime, modifiedTime",
     });
 
-    return {
-      id: response.data.id!,
-      name: response.data.name!,
-      mimeType: response.data.mimeType!,
-      parents: response.data.parents || undefined,
-      webViewLink: response.data.webViewLink || undefined,
-      createdTime: response.data.createdTime || undefined,
-      modifiedTime: response.data.modifiedTime || undefined,
-    };
+    return toDriveFile(response.data);
   }
 
   public async renameFile(fileId: string, newName: string): Promise<DriveFile> {
@@ -403,15 +361,7 @@ export class DriveService {
       fields: "id, name, mimeType, parents, webViewLink, createdTime, modifiedTime",
     });
 
-    return {
-      id: response.data.id!,
-      name: response.data.name!,
-      mimeType: response.data.mimeType!,
-      parents: response.data.parents || undefined,
-      webViewLink: response.data.webViewLink || undefined,
-      createdTime: response.data.createdTime || undefined,
-      modifiedTime: response.data.modifiedTime || undefined,
-    };
+    return toDriveFile(response.data);
   }
 }
 

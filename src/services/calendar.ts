@@ -101,16 +101,21 @@ export class CalendarService {
       maxResults: 250,
     });
 
-    return (response.data.items || []).map((cal) => ({
-      id: cal.id!,
-      summary: cal.summary || "",
-      description: cal.description || undefined,
-      timeZone: cal.timeZone || undefined,
-      primary: cal.primary || false,
-      accessRole: cal.accessRole || undefined,
-      backgroundColor: cal.backgroundColor || undefined,
-      foregroundColor: cal.foregroundColor || undefined,
-    }));
+    return (response.data.items || []).map((cal) => {
+      if (!cal.id) {
+        throw new Error("Calendar API returned a calendar list entry without an id.");
+      }
+      return {
+        id: cal.id,
+        summary: cal.summary || "",
+        description: cal.description || undefined,
+        timeZone: cal.timeZone || undefined,
+        primary: cal.primary || false,
+        accessRole: cal.accessRole || undefined,
+        backgroundColor: cal.backgroundColor || undefined,
+        foregroundColor: cal.foregroundColor || undefined,
+      };
+    });
   }
 
   public async getCalendar(calendarId: string): Promise<CalendarInfo> {
@@ -119,7 +124,7 @@ export class CalendarService {
     });
 
     return {
-      id: response.data.id!,
+      id: response.data.id ?? calendarId,
       summary: response.data.summary || "",
       description: response.data.description || undefined,
       timeZone: response.data.timeZone || undefined,
@@ -347,8 +352,11 @@ export class CalendarService {
   }
 
   private formatEvent(event: calendar_v3.Schema$Event): CalendarEvent {
+    if (!event.id) {
+      throw new Error("Calendar API returned an event without an id.");
+    }
     return {
-      id: event.id!,
+      id: event.id,
       summary: event.summary || undefined,
       description: event.description || undefined,
       location: event.location || undefined,

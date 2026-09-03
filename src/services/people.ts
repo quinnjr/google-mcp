@@ -105,8 +105,9 @@ export class PeopleService {
     });
 
     return (response.data.results || [])
-      .filter((r) => r.person)
-      .map((r) => this.formatContact(r.person!));
+      .map((r) => r.person)
+      .filter((person): person is NonNullable<typeof person> => person != null)
+      .map((person) => this.formatContact(person));
   }
 
   public async createContact(options: CreateContactOptions): Promise<Contact> {
@@ -370,19 +371,21 @@ export class PeopleService {
       // structured date). Those carry nothing this shape can express, so drop
       // them rather than emitting { date: undefined } entries.
       birthdays: person.birthdays
-        ?.filter((b) => b.date)
-        .map((b) => ({
+        ?.map((b) => b.date)
+        .filter((date): date is NonNullable<typeof date> => date != null)
+        .map((date) => ({
           date: {
-            year: b.date!.year || undefined,
-            month: b.date!.month || undefined,
-            day: b.date!.day || undefined,
+            year: date.year || undefined,
+            month: date.month || undefined,
+            day: date.day || undefined,
           },
         })),
       notes: primaryBio?.value || undefined,
       photos: person.photos?.map((p) => ({ url: p.url || undefined })),
       memberships: person.memberships
-        ?.filter((m) => m.contactGroupMembership?.contactGroupResourceName)
-        .map((m) => ({ contactGroupResourceName: m.contactGroupMembership!.contactGroupResourceName! })),
+        ?.map((m) => m.contactGroupMembership?.contactGroupResourceName)
+        .filter((name): name is NonNullable<typeof name> => name != null)
+        .map((contactGroupResourceName) => ({ contactGroupResourceName })),
     };
   }
 }

@@ -19,7 +19,10 @@ export class DocsService {
       },
     });
 
-    const documentId = response.data.documentId!;
+    const documentId = response.data.documentId;
+    if (!documentId) {
+      throw new Error("Docs API did not return a documentId for the created document.");
+    }
 
     // If content is provided, insert it
     if (content) {
@@ -45,7 +48,7 @@ export class DocsService {
 
     return {
       documentId,
-      title: response.data.title!,
+      title: response.data.title ?? title,
       body: content,
     };
   }
@@ -57,8 +60,8 @@ export class DocsService {
     const body = this.extractTextFromDocument(response.data);
 
     return {
-      documentId: response.data.documentId!,
-      title: response.data.title!,
+      documentId: response.data.documentId ?? documentId,
+      title: response.data.title ?? "",
       body,
       revisionId: response.data.revisionId || undefined,
     };

@@ -194,8 +194,9 @@ export const resolveFileSource = async (
   // and mislabelling those text/plain is what breaks the Drive round-trip.
   let defaultMime = DEFAULT_MIME_TYPE;
 
-  if (hasPath) {
-    const absolute = await withinRoot(source.path!, "`path`");
+  if (source.path !== undefined) {
+    const sourcePath = source.path;
+    const absolute = await withinRoot(sourcePath, "`path`");
 
     // stat before read: readFile on /dev/zero or a 4 GB log buffers the whole
     // thing into memory and OOMs the server long before the size check below
@@ -204,7 +205,7 @@ export const resolveFileSource = async (
     try {
       stats = await lstat(absolute);
     } catch (error) {
-      throw fsError(error, "`path`", source.path!);
+      throw fsError(error, "`path`", sourcePath);
     }
     if (stats.isSymbolicLink()) {
       throw new Error(`\`path\` "${source.path}": symlinks are not followed.`);
@@ -221,14 +222,14 @@ export const resolveFileSource = async (
     try {
       data = await readFile(absolute);
     } catch (error) {
-      throw fsError(error, "`path`", source.path!);
+      throw fsError(error, "`path`", sourcePath);
     }
     defaultName = basename(absolute);
   } else if ((source.encoding || defaultEncoding) === "base64") {
-    data = decodeBase64(source.content!, label);
+    data = decodeBase64(source.content ?? "", label);
     defaultName = "attachment";
   } else {
-    data = Buffer.from(source.content!, "utf-8");
+    data = Buffer.from(source.content ?? "", "utf-8");
     defaultName = "attachment";
     defaultMime = "text/plain";
   }

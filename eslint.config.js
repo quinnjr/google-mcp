@@ -97,6 +97,11 @@ export default tseslint.config(
       "@typescript-eslint/consistent-type-assertions": "off",
       // Allow any in tests
       "@typescript-eslint/no-explicit-any": "off",
+      // Allow non-null assertions in tests: they assert invariants the test
+      // itself has already established (a mock was configured to return a
+      // value, an array the test just built is non-empty). A failed assertion
+      // surfaces as an obvious test failure, not a production hazard.
+      "@typescript-eslint/no-non-null-assertion": "off",
     },
   },
   {

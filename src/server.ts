@@ -151,6 +151,74 @@ export class GoogleWorkspaceMCPServer {
     }
   }
 
+  /**
+   * Returns an initialized service handle or throws a clear, actionable error.
+   *
+   * Service handles are null until initializeServices() runs after OAuth is
+   * ready. Every tool handler calls ensureAuthenticated() first, which
+   * guarantees initialization, so in normal flow these never throw. The throw
+   * is a typed safety net: it replaces the previous non-null assertions
+   * (this.requireDrive()) with a narrowing check, so a handle reached before
+   * initialization surfaces a named authentication error instead of a raw
+   * "Cannot read properties of null" TypeError.
+   */
+  private require<T>(service: T | null, name: string): T {
+    if (service === null) {
+      throw new Error(
+        `${name} service is not available. Authenticate first using the google_auth tool.`
+      );
+    }
+    return service;
+  }
+
+  public requireDrive(): DriveService {
+    return this.require(this.drive, "Drive");
+  }
+
+  public requireDocs(): DocsService {
+    return this.require(this.docs, "Docs");
+  }
+
+  public requireSheets(): SheetsService {
+    return this.require(this.sheets, "Sheets");
+  }
+
+  public requireTasks(): TasksService {
+    return this.require(this.tasks, "Tasks");
+  }
+
+  public requireCalendar(): CalendarService {
+    return this.require(this.calendar, "Calendar");
+  }
+
+  public requireGmail(): GmailService {
+    return this.require(this.gmail, "Gmail");
+  }
+
+  public requirePeople(): PeopleService {
+    return this.require(this.people, "People");
+  }
+
+  public requireYouTube(): YouTubeService {
+    return this.require(this.youtube, "YouTube");
+  }
+
+  public requireSlides(): SlidesService {
+    return this.require(this.slidesService, "Slides");
+  }
+
+  public requireForms(): FormsService {
+    return this.require(this.forms, "Forms");
+  }
+
+  public requireChat(): ChatService {
+    return this.require(this.chat, "Chat");
+  }
+
+  public requireMeet(): MeetService {
+    return this.require(this.meet, "Meet");
+  }
+
   private async ensureAuthenticated(): Promise<void> {
     if (!oauth.isReady()) {
       throw new Error(
@@ -3150,7 +3218,7 @@ export class GoogleWorkspaceMCPServer {
         // Google Drive tools
         if (name === "drive_list_files") {
           const options = DriveListOptionsSchema.parse(args);
-          const result = await this.drive!.listFiles(options);
+          const result = await this.requireDrive().listFiles(options);
           return {
             content: [
               {
@@ -3163,7 +3231,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "drive_get_file") {
           const { fileId } = args as { fileId: string };
-          const result = await this.drive!.getFile(fileId);
+          const result = await this.requireDrive().getFile(fileId);
           return {
             content: [
               {
@@ -3176,7 +3244,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "drive_download_file") {
           const { fileId, ...options } = DriveDownloadSchema.parse(args);
-          const result = await this.drive!.downloadFile(fileId, options);
+          const result = await this.requireDrive().downloadFile(fileId, options);
           // Always the full record: a bare string gave the caller base64 with
           // nothing saying it was base64, and dropped name/mimeType/size.
           return {
@@ -3185,7 +3253,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "drive_upload_file") {
-          const result = await this.drive!.uploadFile(DriveUploadSchema.parse(args));
+          const result = await this.requireDrive().uploadFile(DriveUploadSchema.parse(args));
           return {
             content: [
               {
@@ -3198,7 +3266,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "drive_update_file") {
           const { fileId, ...source } = DriveUpdateFileSchema.parse(args);
-          const result = await this.drive!.updateFile(fileId, source);
+          const result = await this.requireDrive().updateFile(fileId, source);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -3206,7 +3274,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "drive_delete_file") {
           const { fileId } = DriveDeleteSchema.parse(args);
-          await this.drive!.deleteFile(fileId);
+          await this.requireDrive().deleteFile(fileId);
           return {
             content: [
               {
@@ -3219,7 +3287,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "drive_create_folder") {
           const { name: folderName, parentFolderId } = DriveCreateFolderSchema.parse(args);
-          const result = await this.drive!.createFolder(folderName, parentFolderId);
+          const result = await this.requireDrive().createFolder(folderName, parentFolderId);
           return {
             content: [
               {
@@ -3232,7 +3300,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "drive_search") {
           const { query, pageSize, pageToken } = DriveSearchSchema.parse(args);
-          const result = await this.drive!.search(query, pageSize, pageToken);
+          const result = await this.requireDrive().search(query, pageSize, pageToken);
           return {
             content: [
               {
@@ -3245,7 +3313,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "drive_move_file") {
           const { fileId, newFolderId } = args as { fileId: string; newFolderId: string };
-          const result = await this.drive!.moveFile(fileId, newFolderId);
+          const result = await this.requireDrive().moveFile(fileId, newFolderId);
           return {
             content: [
               {
@@ -3262,7 +3330,7 @@ export class GoogleWorkspaceMCPServer {
             newName?: string;
             folderId?: string;
           };
-          const result = await this.drive!.copyFile(fileId, newName, folderId);
+          const result = await this.requireDrive().copyFile(fileId, newName, folderId);
           return {
             content: [
               {
@@ -3275,7 +3343,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "drive_rename_file") {
           const { fileId, newName } = args as { fileId: string; newName: string };
-          const result = await this.drive!.renameFile(fileId, newName);
+          const result = await this.requireDrive().renameFile(fileId, newName);
           return {
             content: [
               {
@@ -3289,7 +3357,7 @@ export class GoogleWorkspaceMCPServer {
         // Google Docs tools
         if (name === "docs_create") {
           const { title, content, folderId } = DocCreateOptionsSchema.parse(args);
-          const result = await this.docs!.createDocument(title, content, folderId);
+          const result = await this.requireDocs().createDocument(title, content, folderId);
           return {
             content: [
               {
@@ -3302,7 +3370,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "docs_read") {
           const { documentId } = DocReadOptionsSchema.parse(args);
-          const result = await this.docs!.getDocument(documentId);
+          const result = await this.requireDocs().getDocument(documentId);
           return {
             content: [
               {
@@ -3315,7 +3383,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "docs_insert_text") {
           const { documentId, text, index } = DocUpdateTextSchema.parse(args);
-          await this.docs!.insertText(documentId, text, index);
+          await this.requireDocs().insertText(documentId, text, index);
           return {
             content: [
               {
@@ -3328,7 +3396,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "docs_append_text") {
           const { documentId, text } = args as { documentId: string; text: string };
-          await this.docs!.appendText(documentId, text);
+          await this.requireDocs().appendText(documentId, text);
           return {
             content: [
               {
@@ -3342,7 +3410,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "docs_replace_text") {
           const { documentId, searchText, replaceText, matchCase } =
             DocReplaceTextSchema.parse(args);
-          const count = await this.docs!.replaceAllText(
+          const count = await this.requireDocs().replaceAllText(
             documentId,
             searchText,
             replaceText,
@@ -3363,7 +3431,7 @@ export class GoogleWorkspaceMCPServer {
             pageSize?: number;
             pageToken?: string;
           };
-          const result = await this.docs!.listDocuments(pageSize, pageToken);
+          const result = await this.requireDocs().listDocuments(pageSize, pageToken);
           return {
             content: [
               {
@@ -3377,7 +3445,7 @@ export class GoogleWorkspaceMCPServer {
         // Google Sheets tools
         if (name === "sheets_create") {
           const { title, sheets, folderId } = SheetCreateOptionsSchema.parse(args);
-          const result = await this.sheets!.createSpreadsheet(title, sheets, folderId);
+          const result = await this.requireSheets().createSpreadsheet(title, sheets, folderId);
           return {
             content: [
               {
@@ -3390,7 +3458,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "sheets_get") {
           const { spreadsheetId } = args as { spreadsheetId: string };
-          const result = await this.sheets!.getSpreadsheet(spreadsheetId);
+          const result = await this.requireSheets().getSpreadsheet(spreadsheetId);
           return {
             content: [
               {
@@ -3403,7 +3471,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "sheets_read") {
           const { spreadsheetId, range } = SheetReadOptionsSchema.parse(args);
-          const result = await this.sheets!.getValues(spreadsheetId, range || "A1:ZZ1000");
+          const result = await this.requireSheets().getValues(spreadsheetId, range || "A1:ZZ1000");
           return {
             content: [
               {
@@ -3417,7 +3485,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "sheets_update") {
           const { spreadsheetId, range, values, valueInputOption } =
             SheetUpdateOptionsSchema.parse(args);
-          const result = await this.sheets!.updateValues(
+          const result = await this.requireSheets().updateValues(
             spreadsheetId,
             range,
             values,
@@ -3436,7 +3504,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "sheets_append") {
           const { spreadsheetId, range, values, valueInputOption } =
             SheetAppendOptionsSchema.parse(args);
-          const result = await this.sheets!.appendValues(
+          const result = await this.requireSheets().appendValues(
             spreadsheetId,
             range,
             values,
@@ -3457,7 +3525,7 @@ export class GoogleWorkspaceMCPServer {
             spreadsheetId: string;
             range: string;
           };
-          await this.sheets!.clearValues(spreadsheetId, range);
+          await this.requireSheets().clearValues(spreadsheetId, range);
           return {
             content: [
               {
@@ -3473,7 +3541,7 @@ export class GoogleWorkspaceMCPServer {
             spreadsheetId: string;
             title: string;
           };
-          const result = await this.sheets!.addSheet(spreadsheetId, title);
+          const result = await this.requireSheets().addSheet(spreadsheetId, title);
           return {
             content: [
               {
@@ -3489,7 +3557,7 @@ export class GoogleWorkspaceMCPServer {
             spreadsheetId: string;
             sheetId: number;
           };
-          await this.sheets!.deleteSheet(spreadsheetId, sheetId);
+          await this.requireSheets().deleteSheet(spreadsheetId, sheetId);
           return {
             content: [
               {
@@ -3505,7 +3573,7 @@ export class GoogleWorkspaceMCPServer {
             pageSize?: number;
             pageToken?: string;
           };
-          const result = await this.sheets!.listSpreadsheets(pageSize, pageToken);
+          const result = await this.requireSheets().listSpreadsheets(pageSize, pageToken);
           return {
             content: [
               {
@@ -3518,7 +3586,7 @@ export class GoogleWorkspaceMCPServer {
 
         // Google Tasks tools
         if (name === "tasks_list_tasklists") {
-          const result = await this.tasks!.listTaskLists();
+          const result = await this.requireTasks().listTaskLists();
           return {
             content: [
               {
@@ -3531,7 +3599,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "tasks_create_tasklist") {
           const { title } = TaskListCreateSchema.parse(args);
-          const result = await this.tasks!.createTaskList(title);
+          const result = await this.requireTasks().createTaskList(title);
           return {
             content: [
               {
@@ -3544,7 +3612,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "tasks_delete_tasklist") {
           const { taskListId } = args as { taskListId: string };
-          await this.tasks!.deleteTaskList(taskListId);
+          await this.requireTasks().deleteTaskList(taskListId);
           return {
             content: [
               {
@@ -3562,7 +3630,7 @@ export class GoogleWorkspaceMCPServer {
             maxResults?: number;
             pageToken?: string;
           };
-          const result = await this.tasks!.listTasks(taskListId, {
+          const result = await this.requireTasks().listTasks(taskListId, {
             showCompleted,
             maxResults,
             pageToken,
@@ -3579,7 +3647,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "tasks_create_task") {
           const { taskListId, title, notes, due } = TaskCreateOptionsSchema.parse(args);
-          const result = await this.tasks!.createTask(taskListId, { title, notes, due });
+          const result = await this.requireTasks().createTask(taskListId, { title, notes, due });
           return {
             content: [
               {
@@ -3593,7 +3661,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "tasks_update_task") {
           const { taskListId, taskId, title, notes, status, due } =
             TaskUpdateOptionsSchema.parse(args);
-          const result = await this.tasks!.updateTask(taskListId, taskId, {
+          const result = await this.requireTasks().updateTask(taskListId, taskId, {
             title,
             notes,
             status,
@@ -3614,7 +3682,7 @@ export class GoogleWorkspaceMCPServer {
             taskListId: string;
             taskId: string;
           };
-          await this.tasks!.deleteTask(taskListId, taskId);
+          await this.requireTasks().deleteTask(taskListId, taskId);
           return {
             content: [
               {
@@ -3630,7 +3698,7 @@ export class GoogleWorkspaceMCPServer {
             taskListId: string;
             taskId: string;
           };
-          const result = await this.tasks!.completeTask(taskListId, taskId);
+          const result = await this.requireTasks().completeTask(taskListId, taskId);
           return {
             content: [
               {
@@ -3644,7 +3712,7 @@ export class GoogleWorkspaceMCPServer {
         // Notes (Keep-like) tools
         if (name === "notes_create") {
           const { title, content } = args as { title: string; content: string };
-          const result = await this.tasks!.createNote(title, content);
+          const result = await this.requireTasks().createNote(title, content);
           return {
             content: [
               {
@@ -3656,7 +3724,7 @@ export class GoogleWorkspaceMCPServer {
         }
 
         if (name === "notes_list") {
-          const result = await this.tasks!.listNotes();
+          const result = await this.requireTasks().listNotes();
           return {
             content: [
               {
@@ -3673,7 +3741,7 @@ export class GoogleWorkspaceMCPServer {
             title?: string;
             content?: string;
           };
-          const result = await this.tasks!.updateNote(taskId, title, content);
+          const result = await this.requireTasks().updateNote(taskId, title, content);
           return {
             content: [
               {
@@ -3686,7 +3754,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "notes_delete") {
           const { taskId } = args as { taskId: string };
-          await this.tasks!.deleteNote(taskId);
+          await this.requireTasks().deleteNote(taskId);
           return {
             content: [
               {
@@ -3699,7 +3767,7 @@ export class GoogleWorkspaceMCPServer {
 
         // Google Calendar tools
         if (name === "calendar_list") {
-          const result = await this.calendar!.listCalendars();
+          const result = await this.requireCalendar().listCalendars();
           return {
             content: [
               {
@@ -3712,7 +3780,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "calendar_get") {
           const { calendarId } = args as { calendarId: string };
-          const result = await this.calendar!.getCalendar(calendarId);
+          const result = await this.requireCalendar().getCalendar(calendarId);
           return {
             content: [
               {
@@ -3732,7 +3800,7 @@ export class GoogleWorkspaceMCPServer {
             q?: string;
             pageToken?: string;
           };
-          const result = await this.calendar!.listEvents(calendarId || "primary", {
+          const result = await this.requireCalendar().listEvents(calendarId || "primary", {
             timeMin,
             timeMax,
             maxResults,
@@ -3754,7 +3822,7 @@ export class GoogleWorkspaceMCPServer {
             calendarId?: string;
             eventId: string;
           };
-          const result = await this.calendar!.getEvent(calendarId || "primary", eventId);
+          const result = await this.requireCalendar().getEvent(calendarId || "primary", eventId);
           return {
             content: [
               {
@@ -3803,7 +3871,7 @@ export class GoogleWorkspaceMCPServer {
             ? { dateTime: endDateTime, timeZone }
             : { date: endDate };
 
-          const result = await this.calendar!.createEvent({
+          const result = await this.requireCalendar().createEvent({
             calendarId,
             summary,
             description,
@@ -3859,7 +3927,7 @@ export class GoogleWorkspaceMCPServer {
             ? { dateTime: endDateTime, timeZone }
             : undefined;
 
-          const result = await this.calendar!.updateEvent({
+          const result = await this.requireCalendar().updateEvent({
             calendarId,
             eventId,
             summary,
@@ -3887,7 +3955,7 @@ export class GoogleWorkspaceMCPServer {
             eventId: string;
             sendUpdates?: "all" | "externalOnly" | "none";
           };
-          await this.calendar!.deleteEvent(calendarId || "primary", eventId, sendUpdates);
+          await this.requireCalendar().deleteEvent(calendarId || "primary", eventId, sendUpdates);
           return {
             content: [
               {
@@ -3904,7 +3972,7 @@ export class GoogleWorkspaceMCPServer {
             text: string;
             sendUpdates?: "all" | "externalOnly" | "none";
           };
-          const result = await this.calendar!.quickAddEvent(
+          const result = await this.requireCalendar().quickAddEvent(
             calendarId || "primary",
             text,
             sendUpdates
@@ -3925,7 +3993,7 @@ export class GoogleWorkspaceMCPServer {
             timeMax: string;
             calendarIds?: string[];
           };
-          const result = await this.calendar!.getFreeBusy(
+          const result = await this.requireCalendar().getFreeBusy(
             timeMin,
             timeMax,
             calendarIds || ["primary"]
@@ -3942,7 +4010,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "calendar_today") {
           const { calendarId } = args as { calendarId?: string };
-          const result = await this.calendar!.getTodayEvents(calendarId || "primary");
+          const result = await this.requireCalendar().getTodayEvents(calendarId || "primary");
           return {
             content: [
               {
@@ -3959,7 +4027,7 @@ export class GoogleWorkspaceMCPServer {
             days?: number;
             maxResults?: number;
           };
-          const result = await this.calendar!.getUpcomingEvents(
+          const result = await this.requireCalendar().getUpcomingEvents(
             calendarId || "primary",
             days || 7,
             maxResults || 20
@@ -3976,14 +4044,14 @@ export class GoogleWorkspaceMCPServer {
 
         // Gmail tools
         if (name === "gmail_get_profile") {
-          const result = await this.gmail!.getProfile();
+          const result = await this.requireGmail().getProfile();
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
         }
 
         if (name === "gmail_list_labels") {
-          const result = await this.gmail!.listLabels();
+          const result = await this.requireGmail().listLabels();
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -3996,7 +4064,7 @@ export class GoogleWorkspaceMCPServer {
             labelIds?: string[];
             pageToken?: string;
           };
-          const result = await this.gmail!.listMessages({ maxResults, q, labelIds, pageToken });
+          const result = await this.requireGmail().listMessages({ maxResults, q, labelIds, pageToken });
           return {
             content: [{ type: "text", text: untrustedEmailContent(result) }],
           };
@@ -4004,14 +4072,14 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "gmail_get_message") {
           const { messageId } = args as { messageId: string };
-          const result = await this.gmail!.getMessage(messageId);
+          const result = await this.requireGmail().getMessage(messageId);
           return {
             content: [{ type: "text", text: untrustedEmailContent(result) }],
           };
         }
 
         if (name === "gmail_send") {
-          const result = await this.gmail!.sendEmail(GmailSendSchema.parse(args));
+          const result = await this.requireGmail().sendEmail(GmailSendSchema.parse(args));
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4019,7 +4087,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "gmail_reply") {
           const { messageId, body, isHtml, attachments } = GmailReplySchema.parse(args);
-          const result = await this.gmail!.replyToEmail(
+          const result = await this.requireGmail().replyToEmail(
             messageId,
             body,
             isHtml,
@@ -4033,7 +4101,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "gmail_get_attachment") {
           const { messageId, attachmentId, savePath } =
             GmailGetAttachmentSchema.parse(args);
-          const result = await this.gmail!.getAttachment(messageId, attachmentId, {
+          const result = await this.requireGmail().getAttachment(messageId, attachmentId, {
             savePath,
           });
           return {
@@ -4043,7 +4111,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "gmail_trash") {
           const { messageId } = args as { messageId: string };
-          await this.gmail!.trashMessage(messageId);
+          await this.requireGmail().trashMessage(messageId);
           return {
             content: [{ type: "text", text: `Message ${messageId} moved to trash.` }],
           };
@@ -4051,7 +4119,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "gmail_mark_read") {
           const { messageId } = args as { messageId: string };
-          await this.gmail!.markAsRead(messageId);
+          await this.requireGmail().markAsRead(messageId);
           return {
             content: [{ type: "text", text: `Message ${messageId} marked as read.` }],
           };
@@ -4059,7 +4127,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "gmail_mark_unread") {
           const { messageId } = args as { messageId: string };
-          await this.gmail!.markAsUnread(messageId);
+          await this.requireGmail().markAsUnread(messageId);
           return {
             content: [{ type: "text", text: `Message ${messageId} marked as unread.` }],
           };
@@ -4067,7 +4135,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "gmail_search") {
           const { query, maxResults } = args as { query: string; maxResults?: number };
-          const result = await this.gmail!.searchEmails(query, maxResults || 20);
+          const result = await this.requireGmail().searchEmails(query, maxResults || 20);
           return {
             content: [{ type: "text", text: untrustedEmailContent(result) }],
           };
@@ -4075,7 +4143,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "gmail_get_unread") {
           const { maxResults } = args as { maxResults?: number };
-          const result = await this.gmail!.getUnreadEmails(maxResults || 20);
+          const result = await this.requireGmail().getUnreadEmails(maxResults || 20);
           return {
             content: [{ type: "text", text: untrustedEmailContent(result) }],
           };
@@ -4083,7 +4151,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "gmail_get_thread") {
           const { threadId } = args as { threadId: string };
-          const result = await this.gmail!.getThread(threadId);
+          const result = await this.requireGmail().getThread(threadId);
           return {
             content: [{ type: "text", text: untrustedEmailContent(result) }],
           };
@@ -4096,7 +4164,7 @@ export class GoogleWorkspaceMCPServer {
             pageToken?: string;
             sortOrder?: "LAST_MODIFIED_ASCENDING" | "LAST_MODIFIED_DESCENDING" | "FIRST_NAME_ASCENDING" | "LAST_NAME_ASCENDING";
           };
-          const result = await this.people!.listContacts({ pageSize, pageToken, sortOrder });
+          const result = await this.requirePeople().listContacts({ pageSize, pageToken, sortOrder });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4104,7 +4172,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "contacts_get") {
           const { resourceName } = args as { resourceName: string };
-          const result = await this.people!.getContact(resourceName);
+          const result = await this.requirePeople().getContact(resourceName);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4112,7 +4180,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "contacts_search") {
           const { query, maxResults } = args as { query: string; maxResults?: number };
-          const result = await this.people!.searchContacts(query, maxResults || 30);
+          const result = await this.requirePeople().searchContacts(query, maxResults || 30);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4128,7 +4196,7 @@ export class GoogleWorkspaceMCPServer {
             jobTitle?: string;
             notes?: string;
           };
-          const result = await this.people!.createContact({
+          const result = await this.requirePeople().createContact({
             givenName,
             familyName,
             emails: email ? [{ value: email }] : undefined,
@@ -4153,10 +4221,15 @@ export class GoogleWorkspaceMCPServer {
             notes?: string;
           };
           // Fetch current contact to get the required etag
-          const current = await this.people!.getContact(resourceName);
-          const result = await this.people!.updateContact({
+          const current = await this.requirePeople().getContact(resourceName);
+          if (!current.etag) {
+            throw new Error(
+              `Contact ${resourceName} did not return an etag; cannot perform an update without it.`
+            );
+          }
+          const result = await this.requirePeople().updateContact({
             resourceName,
-            etag: current.etag!,
+            etag: current.etag,
             givenName,
             familyName,
             emails: email ? [{ value: email }] : undefined,
@@ -4171,14 +4244,14 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "contacts_delete") {
           const { resourceName } = args as { resourceName: string };
-          await this.people!.deleteContact(resourceName);
+          await this.requirePeople().deleteContact(resourceName);
           return {
             content: [{ type: "text", text: `Contact ${resourceName} deleted.` }],
           };
         }
 
         if (name === "contacts_list_groups") {
-          const result = await this.people!.listContactGroups();
+          const result = await this.requirePeople().listContactGroups();
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4189,7 +4262,7 @@ export class GoogleWorkspaceMCPServer {
             groupResourceName: string;
             contactResourceNames: string[];
           };
-          await this.people!.addContactsToGroup(groupResourceName, contactResourceNames);
+          await this.requirePeople().addContactsToGroup(groupResourceName, contactResourceNames);
           return {
             content: [{ type: "text", text: `Added ${contactResourceNames.length} contact(s) to group ${groupResourceName}.` }],
           };
@@ -4197,7 +4270,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "contacts_get_group") {
           const { resourceName } = args as { resourceName: string };
-          const result = await this.people!.getContactGroup(resourceName);
+          const result = await this.requirePeople().getContactGroup(resourceName);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4205,7 +4278,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "contacts_create_group") {
           const { name } = args as { name: string };
-          const result = await this.people!.createContactGroup(name);
+          const result = await this.requirePeople().createContactGroup(name);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4213,7 +4286,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "contacts_delete_group") {
           const { resourceName } = args as { resourceName: string };
-          await this.people!.deleteContactGroup(resourceName);
+          await this.requirePeople().deleteContactGroup(resourceName);
           return {
             content: [{ type: "text", text: `Contact group ${resourceName} deleted.` }],
           };
@@ -4228,7 +4301,7 @@ export class GoogleWorkspaceMCPServer {
             order?: "date" | "rating" | "relevance" | "title" | "viewCount";
             pageToken?: string;
           };
-          const result = await this.youtube!.search({ query, type, maxResults, order, pageToken });
+          const result = await this.requireYouTube().search({ query, type, maxResults, order, pageToken });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4236,7 +4309,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "youtube_get_video") {
           const { videoId } = args as { videoId: string };
-          const result = await this.youtube!.getVideo(videoId);
+          const result = await this.requireYouTube().getVideo(videoId);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4244,14 +4317,14 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "youtube_get_channel") {
           const { channelId } = args as { channelId: string };
-          const result = await this.youtube!.getChannel(channelId);
+          const result = await this.requireYouTube().getChannel(channelId);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
         }
 
         if (name === "youtube_get_my_channel") {
-          const result = await this.youtube!.getMyChannel();
+          const result = await this.requireYouTube().getMyChannel();
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4259,7 +4332,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "youtube_list_playlists") {
           const { maxResults, pageToken } = args as { maxResults?: number; pageToken?: string };
-          const result = await this.youtube!.listMyPlaylists({ maxResults, pageToken });
+          const result = await this.requireYouTube().listMyPlaylists({ maxResults, pageToken });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4271,7 +4344,7 @@ export class GoogleWorkspaceMCPServer {
             maxResults?: number;
             pageToken?: string;
           };
-          const result = await this.youtube!.getPlaylistItems(playlistId, { maxResults, pageToken });
+          const result = await this.requireYouTube().getPlaylistItems(playlistId, { maxResults, pageToken });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4283,7 +4356,7 @@ export class GoogleWorkspaceMCPServer {
             maxResults?: number;
             order?: "time" | "relevance";
           };
-          const result = await this.youtube!.getVideoComments(videoId, { maxResults, order });
+          const result = await this.requireYouTube().getVideoComments(videoId, { maxResults, order });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4291,7 +4364,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "youtube_list_subscriptions") {
           const { maxResults, pageToken } = args as { maxResults?: number; pageToken?: string };
-          const result = await this.youtube!.listMySubscriptions({ maxResults, pageToken });
+          const result = await this.requireYouTube().listMySubscriptions({ maxResults, pageToken });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4299,7 +4372,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "youtube_list_liked_videos") {
           const { maxResults, pageToken } = args as { maxResults?: number; pageToken?: string };
-          const result = await this.youtube!.listLikedVideos({ maxResults, pageToken });
+          const result = await this.requireYouTube().listLikedVideos({ maxResults, pageToken });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4307,7 +4380,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "youtube_rate_video") {
           const { videoId, rating } = args as { videoId: string; rating: "like" | "dislike" | "none" };
-          await this.youtube!.rateVideo(videoId, rating);
+          await this.requireYouTube().rateVideo(videoId, rating);
           return {
             content: [{ type: "text", text: `Video ${videoId} rated as '${rating}'.` }],
           };
@@ -4316,7 +4389,7 @@ export class GoogleWorkspaceMCPServer {
         // Slides tools
         if (name === "slides_create") {
           const { title, folderId } = args as { title: string; folderId?: string };
-          const result = await this.slidesService!.createPresentation({ title, folderId });
+          const result = await this.requireSlides().createPresentation({ title, folderId });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4324,7 +4397,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "slides_get") {
           const { presentationId } = args as { presentationId: string };
-          const result = await this.slidesService!.getPresentation(presentationId);
+          const result = await this.requireSlides().getPresentation(presentationId);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4332,7 +4405,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "slides_list") {
           const { pageSize, pageToken } = args as { pageSize?: number; pageToken?: string };
-          const result = await this.slidesService!.listPresentations(pageSize || 50, pageToken);
+          const result = await this.requireSlides().listPresentations(pageSize || 50, pageToken);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4344,7 +4417,7 @@ export class GoogleWorkspaceMCPServer {
             layoutType?: "BLANK" | "CAPTION_ONLY" | "TITLE" | "TITLE_AND_BODY" | "TITLE_AND_TWO_COLUMNS" | "TITLE_ONLY" | "SECTION_HEADER" | "MAIN_POINT" | "BIG_NUMBER";
             insertionIndex?: number;
           };
-          const slideId = await this.slidesService!.addSlide({ presentationId, layoutType, insertionIndex });
+          const slideId = await this.requireSlides().addSlide({ presentationId, layoutType, insertionIndex });
           return {
             content: [{ type: "text", text: JSON.stringify({ slideId }, null, 2) }],
           };
@@ -4352,7 +4425,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "slides_delete_slide") {
           const { presentationId, slideObjectId } = args as { presentationId: string; slideObjectId: string };
-          await this.slidesService!.deleteSlide(presentationId, slideObjectId);
+          await this.requireSlides().deleteSlide(presentationId, slideObjectId);
           return {
             content: [{ type: "text", text: `Slide ${slideObjectId} deleted.` }],
           };
@@ -4368,7 +4441,7 @@ export class GoogleWorkspaceMCPServer {
             width?: number;
             height?: number;
           };
-          const textBoxId = await this.slidesService!.addTextBox({
+          const textBoxId = await this.requireSlides().addTextBox({
             presentationId,
             slideObjectId,
             text,
@@ -4392,7 +4465,7 @@ export class GoogleWorkspaceMCPServer {
             width?: number;
             height?: number;
           };
-          const imageId = await this.slidesService!.addImage({
+          const imageId = await this.requireSlides().addImage({
             presentationId,
             slideObjectId,
             imageUrl,
@@ -4413,7 +4486,7 @@ export class GoogleWorkspaceMCPServer {
             replaceText: string;
             matchCase?: boolean;
           };
-          const count = await this.slidesService!.replaceAllText(
+          const count = await this.requireSlides().replaceAllText(
             presentationId,
             searchText,
             replaceText,
@@ -4426,7 +4499,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "slides_duplicate_slide") {
           const { presentationId, slideObjectId } = args as { presentationId: string; slideObjectId: string };
-          const newSlideId = await this.slidesService!.duplicateSlide(presentationId, slideObjectId);
+          const newSlideId = await this.requireSlides().duplicateSlide(presentationId, slideObjectId);
           return {
             content: [{ type: "text", text: JSON.stringify({ newSlideId }, null, 2) }],
           };
@@ -4440,7 +4513,7 @@ export class GoogleWorkspaceMCPServer {
             documentTitle?: string;
             description?: string;
           };
-          const form = await this.forms!.createForm({ title, documentTitle, description });
+          const form = await this.requireForms().createForm({ title, documentTitle, description });
           return {
             content: [{ type: "text", text: JSON.stringify(form, null, 2) }],
           };
@@ -4449,7 +4522,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "forms_get") {
           await this.ensureAuthenticated();
           const { formId } = args as { formId: string };
-          const form = await this.forms!.getForm(formId);
+          const form = await this.requireForms().getForm(formId);
           return {
             content: [{ type: "text", text: JSON.stringify(form, null, 2) }],
           };
@@ -4462,7 +4535,7 @@ export class GoogleWorkspaceMCPServer {
             title?: string;
             description?: string;
           };
-          const form = await this.forms!.updateFormInfo(formId, { title, description });
+          const form = await this.requireForms().updateFormInfo(formId, { title, description });
           return {
             content: [{ type: "text", text: JSON.stringify(form, null, 2) }],
           };
@@ -4480,7 +4553,7 @@ export class GoogleWorkspaceMCPServer {
             options?: string[];
             scaleConfig?: { low: number; high: number; lowLabel?: string; highLabel?: string };
           };
-          const item = await this.forms!.addQuestion({
+          const item = await this.requireForms().addQuestion({
             formId,
             title,
             description,
@@ -4498,7 +4571,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "forms_delete_item") {
           await this.ensureAuthenticated();
           const { formId, itemIndex } = args as { formId: string; itemIndex: number };
-          await this.forms!.deleteItem(formId, itemIndex);
+          await this.requireForms().deleteItem(formId, itemIndex);
           return {
             content: [{ type: "text", text: `Item at index ${itemIndex} deleted.` }],
           };
@@ -4511,7 +4584,7 @@ export class GoogleWorkspaceMCPServer {
             pageSize?: number;
             pageToken?: string;
           };
-          const result = await this.forms!.listResponses(formId, { pageSize, pageToken });
+          const result = await this.requireForms().listResponses(formId, { pageSize, pageToken });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4520,7 +4593,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "forms_get_response") {
           await this.ensureAuthenticated();
           const { formId, responseId } = args as { formId: string; responseId: string };
-          const response = await this.forms!.getResponse(formId, responseId);
+          const response = await this.requireForms().getResponse(formId, responseId);
           return {
             content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
           };
@@ -4529,7 +4602,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "forms_add_page_break") {
           await this.ensureAuthenticated();
           const { formId, title, index } = args as { formId: string; title: string; index?: number };
-          const item = await this.forms!.addPageBreak(formId, title, index);
+          const item = await this.requireForms().addPageBreak(formId, title, index);
           return {
             content: [{ type: "text", text: JSON.stringify(item, null, 2) }],
           };
@@ -4543,7 +4616,7 @@ export class GoogleWorkspaceMCPServer {
             description?: string;
             index?: number;
           };
-          const item = await this.forms!.addTextItem(formId, title, description, index);
+          const item = await this.requireForms().addTextItem(formId, title, description, index);
           return {
             content: [{ type: "text", text: JSON.stringify(item, null, 2) }],
           };
@@ -4558,7 +4631,7 @@ export class GoogleWorkspaceMCPServer {
             altText?: string;
             index?: number;
           };
-          const item = await this.forms!.addImage(formId, sourceUri, { title, altText, index });
+          const item = await this.requireForms().addImage(formId, sourceUri, { title, altText, index });
           return {
             content: [{ type: "text", text: JSON.stringify(item, null, 2) }],
           };
@@ -4573,7 +4646,7 @@ export class GoogleWorkspaceMCPServer {
             caption?: string;
             index?: number;
           };
-          const item = await this.forms!.addVideo(formId, youtubeUri, { title, caption, index });
+          const item = await this.requireForms().addVideo(formId, youtubeUri, { title, caption, index });
           return {
             content: [{ type: "text", text: JSON.stringify(item, null, 2) }],
           };
@@ -4583,7 +4656,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "chat_list_spaces") {
           await this.ensureAuthenticated();
           const { pageSize, pageToken } = args as { pageSize?: number; pageToken?: string };
-          const result = await this.chat!.listSpaces(pageSize, pageToken);
+          const result = await this.requireChat().listSpaces(pageSize, pageToken);
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4592,7 +4665,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "chat_get_space") {
           await this.ensureAuthenticated();
           const { spaceName } = args as { spaceName: string };
-          const space = await this.chat!.getSpace(spaceName);
+          const space = await this.requireChat().getSpace(spaceName);
           return {
             content: [{ type: "text", text: JSON.stringify(space, null, 2) }],
           };
@@ -4607,7 +4680,7 @@ export class GoogleWorkspaceMCPServer {
             description?: string;
             guidelines?: string;
           };
-          const space = await this.chat!.createSpace({
+          const space = await this.requireChat().createSpace({
             displayName,
             spaceType,
             externalUserAllowed,
@@ -4621,7 +4694,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "chat_delete_space") {
           await this.ensureAuthenticated();
           const { spaceName } = args as { spaceName: string };
-          await this.chat!.deleteSpace(spaceName);
+          await this.requireChat().deleteSpace(spaceName);
           return {
             content: [{ type: "text", text: `Space ${spaceName} deleted.` }],
           };
@@ -4636,7 +4709,7 @@ export class GoogleWorkspaceMCPServer {
             filter?: string;
             orderBy?: string;
           };
-          const result = await this.chat!.listMessages(spaceName, { pageSize, pageToken, filter, orderBy });
+          const result = await this.requireChat().listMessages(spaceName, { pageSize, pageToken, filter, orderBy });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4645,7 +4718,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "chat_get_message") {
           await this.ensureAuthenticated();
           const { messageName } = args as { messageName: string };
-          const message = await this.chat!.getMessage(messageName);
+          const message = await this.requireChat().getMessage(messageName);
           return {
             content: [{ type: "text", text: JSON.stringify(message, null, 2) }],
           };
@@ -4658,7 +4731,7 @@ export class GoogleWorkspaceMCPServer {
             text: string;
             threadKey?: string;
           };
-          const message = await this.chat!.sendMessage({ spaceName, text, threadKey });
+          const message = await this.requireChat().sendMessage({ spaceName, text, threadKey });
           return {
             content: [{ type: "text", text: JSON.stringify(message, null, 2) }],
           };
@@ -4667,7 +4740,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "chat_update_message") {
           await this.ensureAuthenticated();
           const { messageName, text } = args as { messageName: string; text: string };
-          const message = await this.chat!.updateMessage({ messageName, text });
+          const message = await this.requireChat().updateMessage({ messageName, text });
           return {
             content: [{ type: "text", text: JSON.stringify(message, null, 2) }],
           };
@@ -4676,7 +4749,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "chat_delete_message") {
           await this.ensureAuthenticated();
           const { messageName, force } = args as { messageName: string; force?: boolean };
-          await this.chat!.deleteMessage(messageName, force);
+          await this.requireChat().deleteMessage(messageName, force);
           return {
             content: [{ type: "text", text: `Message ${messageName} deleted.` }],
           };
@@ -4689,7 +4762,7 @@ export class GoogleWorkspaceMCPServer {
             pageSize?: number;
             pageToken?: string;
           };
-          const result = await this.chat!.listMembers(spaceName, { pageSize, pageToken });
+          const result = await this.requireChat().listMembers(spaceName, { pageSize, pageToken });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4702,7 +4775,7 @@ export class GoogleWorkspaceMCPServer {
             userId: string;
             role?: "ROLE_MEMBER" | "ROLE_MANAGER";
           };
-          const member = await this.chat!.addMember(spaceName, userId, role);
+          const member = await this.requireChat().addMember(spaceName, userId, role);
           return {
             content: [{ type: "text", text: JSON.stringify(member, null, 2) }],
           };
@@ -4711,7 +4784,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "chat_remove_member") {
           await this.ensureAuthenticated();
           const { memberName } = args as { memberName: string };
-          await this.chat!.removeMember(memberName);
+          await this.requireChat().removeMember(memberName);
           return {
             content: [{ type: "text", text: `Member ${memberName} removed.` }],
           };
@@ -4720,7 +4793,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "chat_add_reaction") {
           await this.ensureAuthenticated();
           const { messageName, emoji } = args as { messageName: string; emoji: string };
-          await this.chat!.addReaction(messageName, emoji);
+          await this.requireChat().addReaction(messageName, emoji);
           return {
             content: [{ type: "text", text: `Reaction ${emoji} added to ${messageName}.` }],
           };
@@ -4733,7 +4806,7 @@ export class GoogleWorkspaceMCPServer {
             accessType?: "OPEN" | "TRUSTED" | "RESTRICTED";
             entryPointAccess?: "ALL" | "CREATOR_APP_ONLY";
           };
-          const space = await this.meet!.createSpace({ accessType, entryPointAccess });
+          const space = await this.requireMeet().createSpace({ accessType, entryPointAccess });
           return {
             content: [{ type: "text", text: JSON.stringify(space, null, 2) }],
           };
@@ -4742,7 +4815,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "meet_get_space") {
           await this.ensureAuthenticated();
           const { spaceName } = args as { spaceName: string };
-          const space = await this.meet!.getSpace(spaceName);
+          const space = await this.requireMeet().getSpace(spaceName);
           return {
             content: [{ type: "text", text: JSON.stringify(space, null, 2) }],
           };
@@ -4751,7 +4824,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "meet_end_conference") {
           await this.ensureAuthenticated();
           const { spaceName } = args as { spaceName: string };
-          await this.meet!.endActiveConference(spaceName);
+          await this.requireMeet().endActiveConference(spaceName);
           return {
             content: [{ type: "text", text: `Conference in ${spaceName} ended.` }],
           };
@@ -4768,7 +4841,7 @@ export class GoogleWorkspaceMCPServer {
             timeZone?: string;
             sendUpdates?: "all" | "externalOnly" | "none";
           };
-          const meeting = await this.meet!.scheduleMeeting({
+          const meeting = await this.requireMeet().scheduleMeeting({
             summary,
             description,
             startTime,
@@ -4784,7 +4857,7 @@ export class GoogleWorkspaceMCPServer {
 
         if (name === "meet_create_instant") {
           await this.ensureAuthenticated();
-          const meeting = await this.meet!.createInstantMeeting();
+          const meeting = await this.requireMeet().createInstantMeeting();
           return {
             content: [{ type: "text", text: JSON.stringify(meeting, null, 2) }],
           };
@@ -4793,7 +4866,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "meet_get_by_event") {
           await this.ensureAuthenticated();
           const { eventId } = args as { eventId: string };
-          const meeting = await this.meet!.getMeetingByCalendarEvent(eventId);
+          const meeting = await this.requireMeet().getMeetingByCalendarEvent(eventId);
           return {
             content: [{ type: "text", text: JSON.stringify(meeting, null, 2) }],
           };
@@ -4802,7 +4875,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "meet_list_upcoming") {
           await this.ensureAuthenticated();
           const { days } = args as { days?: number };
-          const meetings = await this.meet!.listUpcomingMeetings(days);
+          const meetings = await this.requireMeet().listUpcomingMeetings(days);
           return {
             content: [{ type: "text", text: JSON.stringify(meetings, null, 2) }],
           };
@@ -4815,7 +4888,7 @@ export class GoogleWorkspaceMCPServer {
             pageToken?: string;
             filter?: string;
           };
-          const result = await this.meet!.listConferenceRecords({ pageSize, pageToken, filter });
+          const result = await this.requireMeet().listConferenceRecords({ pageSize, pageToken, filter });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4824,7 +4897,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "meet_get_conference_record") {
           await this.ensureAuthenticated();
           const { recordName } = args as { recordName: string };
-          const record = await this.meet!.getConferenceRecord(recordName);
+          const record = await this.requireMeet().getConferenceRecord(recordName);
           return {
             content: [{ type: "text", text: JSON.stringify(record, null, 2) }],
           };
@@ -4837,7 +4910,7 @@ export class GoogleWorkspaceMCPServer {
             pageSize?: number;
             pageToken?: string;
           };
-          const result = await this.meet!.listParticipants(conferenceRecordName, { pageSize, pageToken });
+          const result = await this.requireMeet().listParticipants(conferenceRecordName, { pageSize, pageToken });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4850,7 +4923,7 @@ export class GoogleWorkspaceMCPServer {
             pageSize?: number;
             pageToken?: string;
           };
-          const result = await this.meet!.listRecordings(conferenceRecordName, { pageSize, pageToken });
+          const result = await this.requireMeet().listRecordings(conferenceRecordName, { pageSize, pageToken });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4859,7 +4932,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "meet_get_recording") {
           await this.ensureAuthenticated();
           const { recordingName } = args as { recordingName: string };
-          const recording = await this.meet!.getRecording(recordingName);
+          const recording = await this.requireMeet().getRecording(recordingName);
           return {
             content: [{ type: "text", text: JSON.stringify(recording, null, 2) }],
           };
@@ -4872,7 +4945,7 @@ export class GoogleWorkspaceMCPServer {
             pageSize?: number;
             pageToken?: string;
           };
-          const result = await this.meet!.listTranscripts(conferenceRecordName, { pageSize, pageToken });
+          const result = await this.requireMeet().listTranscripts(conferenceRecordName, { pageSize, pageToken });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -4881,7 +4954,7 @@ export class GoogleWorkspaceMCPServer {
         if (name === "meet_get_transcript") {
           await this.ensureAuthenticated();
           const { transcriptName } = args as { transcriptName: string };
-          const transcript = await this.meet!.getTranscript(transcriptName);
+          const transcript = await this.requireMeet().getTranscript(transcriptName);
           return {
             content: [{ type: "text", text: JSON.stringify(transcript, null, 2) }],
           };
@@ -4894,7 +4967,7 @@ export class GoogleWorkspaceMCPServer {
             pageSize?: number;
             pageToken?: string;
           };
-          const result = await this.meet!.listTranscriptEntries(transcriptName, { pageSize, pageToken });
+          const result = await this.requireMeet().listTranscriptEntries(transcriptName, { pageSize, pageToken });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };

@@ -30,7 +30,10 @@ export class SheetsService {
       },
     });
 
-    const spreadsheetId = response.data.spreadsheetId!;
+    const spreadsheetId = response.data.spreadsheetId;
+    if (!spreadsheetId) {
+      throw new Error("Sheets API did not return a spreadsheetId for the created spreadsheet.");
+    }
 
     // Move to folder if specified
     if (folderId) {
@@ -50,8 +53,11 @@ export class SheetsService {
   }
 
   private formatSpreadsheetInfo(data: sheets_v4.Schema$Spreadsheet): SpreadsheetInfo {
+    if (!data.spreadsheetId) {
+      throw new Error("Sheets API returned a spreadsheet without a spreadsheetId.");
+    }
     return {
-      spreadsheetId: data.spreadsheetId!,
+      spreadsheetId: data.spreadsheetId,
       title: data.properties?.title || "",
       spreadsheetUrl: data.spreadsheetUrl || "",
       sheets: (data.sheets || []).map((s) => ({
