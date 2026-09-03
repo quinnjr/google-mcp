@@ -1,5 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
@@ -315,7 +317,6 @@ export class GoogleWorkspaceMCPServer {
                   description: "Folder to upload to",
                 },
               },
-              oneOf: ONE_OF_SOURCE,
             },
           },
           {
@@ -332,7 +333,6 @@ export class GoogleWorkspaceMCPServer {
                 },
               },
               required: ["fileId"],
-              oneOf: ONE_OF_SOURCE,
             },
           },
           {
@@ -4918,10 +4918,12 @@ export class GoogleWorkspaceMCPServer {
 
   /**
    * Connects this server instance to a transport and initializes services if
-   * OAuth is already authenticated at the process level. Used by the SSE HTTP
-   * layer to bind one server instance per client session.
+   * OAuth is already authenticated at the process level. The HTTP layer binds
+   * one server instance per client session for both supported transports.
    */
-  public async connectTransport(transport: SSEServerTransport): Promise<void> {
+  public async connectTransport(
+    transport: SSEServerTransport | StreamableHTTPServerTransport
+  ): Promise<void> {
     if (oauth.isReady()) {
       this.initializeServices();
     }
@@ -4929,22 +4931,21 @@ export class GoogleWorkspaceMCPServer {
   }
 
   /**
-   * Runs the server as a long-lived, pooled SSE worker over HTTP.
+   * Runs the server as a long-lived, pooled MCP worker over HTTP.
    *
-   * The MCP `Server` binds exactly one transport, so each SSE client session
-   * gets its own `GoogleWorkspaceMCPServer` instance. All instances share the
-   * same process-level OAuth singleton, so authentication is established once
-   * and reused across every connected agent — no per-agent process launch.
+   * The MCP `Server` binds exactly one transport, so each client session gets
+   * its own `GoogleWorkspaceMCPServer` instance. All instances share the same
+   * process-level OAuth singleton, so authentication is established once and
+   * reused across every connected agent — no per-agent process launch.
    *
    * Endpoints:
-   *   GET  /sse      — opens the SSE event stream, allocates a session
-   *   POST /messages — client → server messages, routed by ?sessionId=...
+   *   ALL  /mcp      — Streamable HTTP (current MCP transport)
+   *   GET  /sse      — legacy SSE event stream
+   *   POST /messages — legacy SSE client messages, routed by ?sessionId=...
    */
   public async run(): Promise<void> {
-    // Ensure directories exist on startup
     oauth.ensureDirectoriesExist();
 
-    // Log configuration paths for user reference
     const paths = GoogleOAuth.getPaths();
     console.error("Google MCP Server starting...");
     console.error(`  Config directory: ${paths.configDir}`);
@@ -4966,32 +4967,74 @@ export class GoogleWorkspaceMCPServer {
     const port = Number(process.env.GOOGLE_MCP_PORT ?? process.env.PORT ?? 3015);
     const host = process.env.GOOGLE_MCP_HOST ?? "127.0.0.1";
 
-    // Active SSE sessions: sessionId -> transport. Each has its own server
-    // instance so message routing stays isolated per client.
-    const sessions = new Map<string, SSEServerTransport>();
+    const sseSessions = new Map<string, SSEServerTransport>();
+    const streamableSessions = new Map<string, StreamableHTTPServerTransport>();
 
     const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? host}`);
 
+      if (url.pathname === "/mcp") {
+        const header = req.headers["mcp-session-id"];
+        const sessionId = Array.isArray(header) ? header[0] : header;
+        let transport = sessionId ? streamableSessions.get(sessionId) : undefined;
+
+        if (sessionId && !transport) {
+          res.writeHead(404).end("Unknown MCP session");
+          return;
+        }
+
+        if (!transport) {
+          if (req.method !== "POST") {
+            res.writeHead(400).end("A new MCP session must start with POST");
+            return;
+          }
+
+          const newTransport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: randomUUID,
+            onsessioninitialized: (initializedSessionId) => {
+              streamableSessions.set(initializedSessionId, newTransport);
+            },
+          });
+          newTransport.onclose = () => {
+            const initializedSessionId = newTransport.sessionId;
+            if (initializedSessionId) {
+              streamableSessions.delete(initializedSessionId);
+            }
+          };
+
+          const sessionServer = new GoogleWorkspaceMCPServer();
+          await sessionServer.connectTransport(newTransport);
+          transport = newTransport;
+        }
+
+        try {
+          await transport.handleRequest(req, res);
+        } catch (error) {
+          console.error("Failed to handle Streamable HTTP request:", error);
+          if (!res.headersSent) {
+            res.writeHead(500).end("Failed to handle MCP request");
+          }
+        }
+        return;
+      }
+
       if (req.method === "GET" && url.pathname === "/sse") {
-        // A fresh server instance per session — required because Server binds
-        // a single transport. Services reuse the shared OAuth singleton.
         const sessionServer = new GoogleWorkspaceMCPServer();
         const transport = new SSEServerTransport("/messages", res);
 
-        sessions.set(transport.sessionId, transport);
+        sseSessions.set(transport.sessionId, transport);
         transport.onclose = () => {
-          sessions.delete(transport.sessionId);
+          sseSessions.delete(transport.sessionId);
         };
         res.on("close", () => {
-          sessions.delete(transport.sessionId);
+          sseSessions.delete(transport.sessionId);
         });
 
         try {
           await sessionServer.connectTransport(transport);
         } catch (error) {
           console.error("Failed to establish SSE session:", error);
-          sessions.delete(transport.sessionId);
+          sseSessions.delete(transport.sessionId);
           if (!res.headersSent) {
             res.writeHead(500).end("Failed to establish SSE session");
           }
@@ -5001,7 +5044,7 @@ export class GoogleWorkspaceMCPServer {
 
       if (req.method === "POST" && url.pathname === "/messages") {
         const sessionId = url.searchParams.get("sessionId");
-        const transport = sessionId ? sessions.get(sessionId) : undefined;
+        const transport = sessionId ? sseSessions.get(sessionId) : undefined;
         if (!transport) {
           res.writeHead(400).end("No active session for the provided sessionId");
           return;
@@ -5017,7 +5060,8 @@ export class GoogleWorkspaceMCPServer {
       httpServer.listen(port, host, () => resolve());
     });
 
-    console.error(`Google MCP Server running on SSE at http://${host}:${port}/sse`);
+    console.error(`Google MCP Server running on Streamable HTTP at http://${host}:${port}/mcp`);
+    console.error(`  Legacy SSE endpoint: http://${host}:${port}/sse`);
   }
 }
 

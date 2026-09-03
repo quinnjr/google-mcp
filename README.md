@@ -169,10 +169,12 @@ The file should look like:
 }
 ```
 
-## Usage with Cursor/Claude
+## Usage with MCP Clients
 
-The server runs as a long-lived SSE worker, not as a stdio subprocess. Start it
-once, then point clients at its `/sse` endpoint.
+The server runs as a long-lived pooled worker, not as a stdio subprocess. It
+exposes the current Streamable HTTP transport at `/mcp` and retains the legacy
+HTTP+SSE transport at `/sse` plus `/messages` for older clients. Start the
+worker once, then point clients at `/mcp`.
 
 Start the worker:
 
@@ -191,7 +193,7 @@ Add to your MCP settings configuration:
 {
   "mcpServers": {
     "google": {
-      "url": "http://127.0.0.1:3015/sse"
+      "url": "http://127.0.0.1:3015/mcp"
     }
   }
 }
@@ -199,7 +201,8 @@ Add to your MCP settings configuration:
 
 Every client that connects gets its own MCP session while sharing one
 authenticated Google session, so you only complete the OAuth flow once no
-matter how many clients or agents attach.
+matter how many clients or agents attach. Legacy SSE clients can continue to
+use `http://127.0.0.1:3015/sse`.
 
 ## Authentication
 
