@@ -9,6 +9,12 @@ import open from "open";
 
 const APP_NAME = "google-mcp";
 
+// Refresh the access token this many milliseconds before its stated expiry.
+// Google access tokens live ~1h; refreshing slightly early avoids a race where
+// a request is sent with a token that expires in-flight. Also used as the
+// staleness threshold for the pooled, long-lived worker (LBP-32).
+const TOKEN_EXPIRY_SKEW_MS = 60_000;
+
 // Port range for OAuth callback server
 const PORT_RANGE_START = 3000;
 const PORT_RANGE_END = 3100;
@@ -223,7 +229,15 @@ export class GoogleOAuth {
   private saveTokens(tokens: Auth.Credentials): void {
     // Ensure directory exists before saving
     this.ensureDirectoriesExist();
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+    // Google does not resend refresh_token on a refresh. Merge over whatever is
+    // already on disk so a refresh never drops the long-lived refresh_token
+    // (losing it forces interactive re-consent — exactly what LBP-32 avoids).
+    const existing = this.loadTokens() ?? {};
+    const merged: Auth.Credentials = { ...existing, ...tokens };
+    if (!merged.refresh_token && existing.refresh_token) {
+      merged.refresh_token = existing.refresh_token;
+    }
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(merged, null, 2), { mode: 0o600 });
   }
 
   private loadTokens(): Auth.Credentials | null {
@@ -265,23 +279,33 @@ export class GoogleOAuth {
       redirect_uris?.[0] || "http://localhost:3000/oauth2callback"
     );
 
+    // googleapis refreshes the access token on demand when a refresh_token is
+    // set and emits a "tokens" event with the new credentials. Persist those so
+    // a background refresh isn't lost on restart (defense in depth alongside
+    // ensureFreshToken). LBP-32.
+    this.oauth2Client.on("tokens", (newTokens) => {
+      try {
+        this.saveTokens(newTokens);
+      } catch (error) {
+        console.error("Error persisting refreshed tokens:", error);
+      }
+    });
+
     // Try to load existing tokens
     const tokens = this.loadTokens();
     if (tokens) {
       this.oauth2Client.setCredentials(tokens);
 
-      // Check if token needs refresh
-      if (tokens.expiry_date && tokens.expiry_date < Date.now()) {
-        try {
-          const { credentials: newTokens } = await this.oauth2Client.refreshAccessToken();
-          this.saveTokens(newTokens);
-          this.oauth2Client.setCredentials(newTokens);
-        } catch (error) {
-          console.error("Error refreshing token, re-authentication required:", error);
-          // Clear invalid tokens so authenticate() knows to start fresh
+      // If the access token is already expired at boot, refresh it now via the
+      // refresh_token rather than falling into interactive auth. A rejected
+      // refresh (no/invalid refresh_token) is the only reason to re-consent.
+      if (this.isAccessTokenStale(tokens)) {
+        const refreshed = await this.ensureFreshToken();
+        if (!refreshed) {
           this.isAuthenticated = false;
           return false;
         }
+        return true;
       }
 
       this.isAuthenticated = true;
@@ -289,6 +313,65 @@ export class GoogleOAuth {
     }
 
     return false;
+  }
+
+  /**
+   * Whether the given credentials' access token is missing, expired, or within
+   * the skew window of expiring. A token with no expiry_date is treated as
+   * needing refresh so we never serve requests on an unknown-lifetime token.
+   */
+  private isAccessTokenStale(tokens: Auth.Credentials): boolean {
+    if (!tokens.expiry_date) {
+      return true;
+    }
+    return tokens.expiry_date - TOKEN_EXPIRY_SKEW_MS <= Date.now();
+  }
+
+  /**
+   * Ensure the in-memory client holds a non-expired access token, refreshing it
+   * from the refresh_token when stale and persisting the result.
+   *
+   * This is the fix for the long-lived pooled worker (LBP-32): the process can
+   * stay up for far longer than the ~1h access-token lifetime, so a check at
+   * boot alone is not enough. Callers invoke this before serving each request.
+   *
+   * Returns true when a usable, fresh token is in place; false when there is no
+   * client, no stored tokens, or Google rejected the refresh (in which case the
+   * client is marked unauthenticated so interactive auth can take over).
+   */
+  public async ensureFreshToken(): Promise<boolean> {
+    if (!this.oauth2Client) {
+      return false;
+    }
+
+    const tokens = this.loadTokens();
+    if (!tokens) {
+      this.isAuthenticated = false;
+      return false;
+    }
+
+    if (!this.isAccessTokenStale(tokens)) {
+      this.isAuthenticated = true;
+      return true;
+    }
+
+    if (!tokens.refresh_token) {
+      // Nothing to refresh with — genuine re-consent required.
+      this.isAuthenticated = false;
+      return false;
+    }
+
+    try {
+      const { credentials: newTokens } = await this.oauth2Client.refreshAccessToken();
+      this.saveTokens(newTokens);
+      this.oauth2Client.setCredentials({ ...tokens, ...newTokens });
+      this.isAuthenticated = true;
+      return true;
+    } catch (error) {
+      console.error("Error refreshing access token, re-authentication required:", error);
+      this.isAuthenticated = false;
+      return false;
+    }
   }
 
   /**
